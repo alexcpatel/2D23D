@@ -49,6 +49,16 @@ LASER_N = norm((LASER_TO_WORLD @ \
 # angle of rotation between each successive scan image
 ROT_ANGLE = (2.0 * math.pi) / NUM_IMAGES
 
+# A = (LASER_TO_WORLD @ np.array([[0.0],[-10.0],[-10.0],[1.0]]))[0:3,:][:,0] - LASER_POS
+# B = (LASER_TO_WORLD @ np.array([[0.0],[-10.0],[10.0],[1.0]]))[0:3,:][:,0] - LASER_POS
+# C = (LASER_TO_WORLD @ np.array([[0.0],[10.0],[-10.0],[1.0]]))[0:3,:][:,0] - LASER_POS
+# D = (LASER_TO_WORLD @ np.array([[0.0],[10.0],[10.0],[1.0]]))[0:3,:][:,0] - LASER_POS
+# print(A)
+# print(B)
+# print(C)
+# print(D)
+# exit(0)
+
 ## HELPER FUNCTIONS ##
 
 # detects pixels along the laser line in the image
@@ -82,7 +92,7 @@ def pixels_to_screen_points(pixels, dim):
   camera_points = np.zeros((4, npixels))
   for i in range(npixels):
     x, y = pixels[i][0] * tx - ox, pixels[i][1] * ty - oy
-    camera_points[:,i] = np.array([x, y, -CAMERA_FOCAL_LENGTH, 1.00])
+    camera_points[:,i] = np.array([x, -y, -CAMERA_FOCAL_LENGTH, 1.00])
 
   # convert pixels to world space
   screen_points = (CAMERA_TO_WORLD @ camera_points)[0:3,:]
@@ -95,14 +105,15 @@ def pixels_to_screen_points(pixels, dim):
 # RETURNS: list of world points
 def screen_points_to_laser_plane(screen_points):
   world_points = []
+  numerator = -np.dot(CAMERA_POS, LASER_N)
   for point in screen_points:
     raydir = norm(point - CAMERA_POS)
     denom  = np.dot(LASER_N, raydir)
-    if denom < 1e-6: continue
-    diff   = LASER_POS - CAMERA_POS
-    time   = np.dot(diff, LASER_N) / denom
+    if abs(denom) < 1e-6: continue
+    time   = numerator / denom
     world  = CAMERA_POS + raydir * time
-    if time < 0 or world[2] < -1e-6: continue
+    if time < 0 or time > CAMERA_POS[1] + 1.0 \
+       or world[2] < 0: continue
     world_points.append(world)
   return world_points
 
@@ -110,7 +121,7 @@ def screen_points_to_laser_plane(screen_points):
 # image index. This gets the corresponding point on the object.
 # RETURNS: list of object points
 def world_points_to_object_points(world_points, i):
-  angle = -ROT_ANGLE * i
+  angle = -ROT_ANGLE * (i-1)
   cosine, sine = math.cos(angle), math.sin(angle)
   rotate = np.array( \
     [[cosine,  -sine, 0.0],
@@ -126,7 +137,7 @@ def world_points_to_object_points(world_points, i):
 
 # generate all points for point cloud from scan
 points = []
-for i in range(1, 2):
+for i in range(1, NUM_IMAGES+1):
   print("processing image %d..." % i)
 
   # read a scan image
@@ -148,11 +159,3 @@ print("formatting pcd file...")
 pcl.points = o3d.utility.Vector3dVector(np_points)
 print("writing pcd file...")
 o3d.io.write_point_cloud("test.pcd", pcl)
-
-# print(pixels[500])
-# print(screen_points[:,500])
-# print(world_points[173])
-
-# print(screen_points)
-# print(LASER_N)
-# print(world_points)
