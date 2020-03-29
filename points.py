@@ -1,16 +1,19 @@
 #!/usr/bin/env python3.7
-import os
+import math
+import open3d as o3d
 import numpy as np
-from skimage import io, filters, feature, draw
-import matplotlib.pyplot as plt
+from skimage import io, feature
 
-## SCAN CONSTANTS (all numbers in meters) ##
+def norm(v): return v / np.sqrt(np.sum(v**2))
+
+## SCAN CONSTANTS (all units in meters) ##
+NUM_IMAGES = 100
 
 # taken from blender object properties
-LASER_POS  = np.array([[-2.50], [7.19], [3.79], [1.00]])
-TARGET_POS = np.array([[ 0.00], [0.00], [0.50], [1.00]])
+LASER_POS  = np.array([-2.50, 7.19, 3.79])
+TARGET_POS = np.array([ 0.00, 0.00, 0.50])
+CAMERA_POS = np.array([ 0.00, 7.19, 3.79])
 
-CAMERA_POS           = np.array([[ 0.00], [7.19], [3.79], [1.00]])
 CAMERA_FOCAL_LENGTH  = 0.050
 CAMERA_SENSOR_WIDTH  = 0.036
 CAMERA_SENSOR_HEIGHT = 0.024
@@ -23,11 +26,30 @@ CAMERA_SENSOR_HEIGHT = 0.024
 ## print(camera.matrix_world)             ##
 ############################################
 
-CAMERA_TO_WORLD = np.linalg.inv(np.array(
+CAMERA_TO_WORLD = np.array( \
   [[-1.0000,  0.0000, 0.0000, 0.0000],
    [ 0.0000, -0.4161, 0.9093, 7.1900],
    [ 0.0000,  0.9093, 0.4161, 3.7900],
-   [ 0.0000,  0.0000, 0.0000, 1.0000]]))
+   [ 0.0000,  0.0000, 0.0000, 1.0000]])
+
+LASER_TO_WORLD  = np.array( \
+  [[-0.7342,  0.0400, -0.0956, -2.5000],
+   [-0.2553, -0.1151,  0.2751,  7.1900],
+   [ 0.0000,  0.2821,  0.1259,  3.7900],
+   [ 0.0000,  0.0000,  0.0000,  1.0000]])
+
+## GLOBAL VARIABLES ##
+
+# +X is perpendicular to laser line in laser space,
+# this transforms that vector into world space to get
+# the laser plane normal
+LASER_N = norm((LASER_TO_WORLD @ \
+  np.array([[1.0],[0.0],[0.0],[1.0]]))[0:3,:][:,0] - LASER_POS)
+
+# angle of rotation between each successive scan image
+ROT_ANGLE = (2.0 * math.pi) / NUM_IMAGES
+
+## HELPER FUNCTIONS ##
 
 # detects pixels along the laser line in the image
 # RETURNS: list of laser pixels as (x, y) tuples
@@ -49,7 +71,7 @@ def detect_laser_pixels(image, dim):
 
 # converts a list of pixels to corresponding screen points
 # in world space as a numpy array
-# RETURNS: (#pixels)x3 numpy array of screen points
+# RETURNS: list of screen points
 def pixels_to_screen_points(pixels, dim):
   iw, ih  = 1.0 / dim[1], 1.0 / dim[0]
   tx, ty  = iw * CAMERA_SENSOR_WIDTH, ih * CAMERA_SENSOR_HEIGHT
@@ -60,18 +82,77 @@ def pixels_to_screen_points(pixels, dim):
   camera_points = np.zeros((4, npixels))
   for i in range(npixels):
     x, y = pixels[i][0] * tx - ox, pixels[i][1] * ty - oy
-    camera_points[:,i] = np.array([x, y, CAMERA_FOCAL_LENGTH, 1.00])
+    camera_points[:,i] = np.array([x, y, -CAMERA_FOCAL_LENGTH, 1.00])
 
   # convert pixels to world space
   screen_points = (CAMERA_TO_WORLD @ camera_points)[0:3,:]
-  return screen_points
+  return np.ndarray.tolist(screen_points.T)
 
-# read scan data
-image = io.imread('scan/scan00001.png')
-dim   = image.shape
+# Perform ray plane intersection from the camera origin through
+# each screen point to the laser plane to determine the point of
+# the laser on the object in world space. This function removes
+# points relating to the background by checking the Z coordinate.
+# RETURNS: list of world points
+def screen_points_to_laser_plane(screen_points):
+  world_points = []
+  for point in screen_points:
+    raydir = norm(point - CAMERA_POS)
+    denom  = np.dot(LASER_N, raydir)
+    if denom < 1e-6: continue
+    diff   = LASER_POS - CAMERA_POS
+    time   = np.dot(diff, LASER_N) / denom
+    world  = CAMERA_POS + raydir * time
+    if time < 0 or world[2] < -1e-6: continue
+    world_points.append(world)
+  return world_points
 
-pixels        = detect_laser_pixels(image, dim)
-screen_points = pixels_to_screen_points(pixels, dim)
-print(dim)
-print(pixels[0])
-print(screen_points[:,0])
+# Reverse rotate points along the center axis based on
+# image index. This gets the corresponding point on the object.
+# RETURNS: list of object points
+def world_points_to_object_points(world_points, i):
+  angle = -ROT_ANGLE * i
+  cosine, sine = math.cos(angle), math.sin(angle)
+  rotate = np.array( \
+    [[cosine,  -sine, 0.0],
+     [  sine, cosine, 0.0],
+     [   0.0,    0.0, 1.0]])
+  object_points = []
+  for world_point in world_points:
+    object_points.append( \
+      np.ndarray.flatten((rotate @ world_point.reshape((-1, 1)))))
+  return object_points
+
+## POINT CLOUD GENERATION SCRIPT ##
+
+# generate all points for point cloud from scan
+points = []
+for i in range(1, 2):
+  print("processing image %d..." % i)
+
+  # read a scan image
+  image = io.imread('scan/scan%05d.png' % i)
+  dim   = image.shape
+
+  # generate points for that image and add to point cloud
+  pixels        = detect_laser_pixels(image, dim)
+  screen_points = pixels_to_screen_points(pixels, dim)
+  world_points  = screen_points_to_laser_plane(screen_points)
+  object_points = world_points_to_object_points(world_points, i)
+  points.extend(object_points)
+
+print("%d points generated" % len(points))
+print("converting points to numpy array...")
+np_points = np.asarray(points, dtype=np.float64)
+pcl = o3d.geometry.PointCloud()
+print("formatting pcd file...")
+pcl.points = o3d.utility.Vector3dVector(np_points)
+print("writing pcd file...")
+o3d.io.write_point_cloud("test.pcd", pcl)
+
+# print(pixels[500])
+# print(screen_points[:,500])
+# print(world_points[173])
+
+# print(screen_points)
+# print(LASER_N)
+# print(world_points)
