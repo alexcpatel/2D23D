@@ -15,7 +15,6 @@ line_set = o3d.geometry.LineSet(
 )
 line_set.colors = o3d.utility.Vector3dVector(colors)
 
-
 base_points = \
   [[ -10, -10, 0],
    [ -10,  10, 0],
