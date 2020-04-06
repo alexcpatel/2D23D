@@ -49,16 +49,6 @@ LASER_N = norm((LASER_TO_WORLD @ \
 # angle of rotation between each successive scan image
 ROT_ANGLE = (2.0 * math.pi) / NUM_IMAGES
 
-# A = (LASER_TO_WORLD @ np.array([[0.0],[-10.0],[-10.0],[1.0]]))[0:3,:][:,0] - LASER_POS
-# B = (LASER_TO_WORLD @ np.array([[0.0],[-10.0],[10.0],[1.0]]))[0:3,:][:,0] - LASER_POS
-# C = (LASER_TO_WORLD @ np.array([[0.0],[10.0],[-10.0],[1.0]]))[0:3,:][:,0] - LASER_POS
-# D = (LASER_TO_WORLD @ np.array([[0.0],[10.0],[10.0],[1.0]]))[0:3,:][:,0] - LASER_POS
-# print(A)
-# print(B)
-# print(C)
-# print(D)
-# exit(0)
-
 ## HELPER FUNCTIONS ##
 
 # detects pixels along the laser line in the image
