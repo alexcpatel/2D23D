@@ -1,28 +1,31 @@
-import os, sys, math
+import os, sys, math, time
 import numpy as np
 import open3d as o3d
-from skimage import io, feature
+from skimage import io
 from constants import *
 
 ## HELPER FUNCTIONS ##
 
 # detects pixels along the laser line in the image
 # RETURNS: list of laser pixels as (x, y) tuples
-def detect_laser_pixels(image, dim):
-  # extract element-wise channel diff
+def detect_laser_pixels(image):
+  # extract element-wise channel diff intensity
   image[...,1] >>= 1; image[...,2] >>= 1
-  diff_image = image[...,0] - image[...,1] - image[...,2]
+  intensity = image[...,0] - image[...,1] - image[...,2]
+  rows, cols = intensity.shape
 
-  # compute row-wise highest intensity pixels (max 3 per row)
-  threshold = 100 # this is an arbitrary number
-  pixels = []
-  for row in range(dim[0]):
-    coordinates = \
-      feature.peak.peak_local_max(diff_image[row,:],
-        threshold_abs=threshold, num_peaks=1)
-    for coordinate in coordinates:
-      pixels.append((coordinate[0], row))
-  return pixels
+  # apply hamming window to smooth intensity rows
+  window      = np.hamming(WINDOW_LEN)
+  intensity   = np.reshape(intensity, (rows*cols,))
+  filtered    = np.convolve(intensity, window, mode='same')
+
+  # compute row-wise local max intensity pixels
+  mask        = np.zeros((rows*cols,), dtype=np.bool)
+  mask[1:-1]  = np.diff(np.sign(np.diff(filtered))) < 0
+  mask       &= intensity > LASER_THRESHOLD
+  mask        = np.reshape(mask, (rows,cols))
+
+  return np.ndarray.tolist(np.argwhere(mask))
 
 # converts a list of pixels to corresponding screen points
 # in world space as a numpy array
@@ -34,7 +37,7 @@ def pixels_to_screen_points(pixels, dim):
   # convert pixels to camera space
   camera_points = np.zeros((4, len(pixels)))
   for i in range(len(pixels)):
-    px, py = pixels[i][0] + 0.5, pixels[i][1] + 0.5
+    px, py = pixels[i][1] + 0.5, pixels[i][0] * PIXEL_SKIP + 0.5
     nx, ny = px * iw - 0.5, py * ih - 0.5
     cx, cy = nx * CAMERA_SENSOR_WIDTH, ny * camera_sensor_height
     camera_points[:,i] = np.array([cx, -cy, -CAMERA_FOCAL_LENGTH, 1.00])
@@ -87,6 +90,11 @@ def generate_points(scan_dir):
   image_num = len(image_names)
   base_angle = (2.0 * math.pi) / image_num
 
+  time_pixels        = 0
+  time_screen_points = 0
+  time_world_points  = 0
+  time_object_points = 0
+
   points = []
   for i in range(image_num):
     image_name = os.path.join(scan_dir, image_names[i])
@@ -95,14 +103,32 @@ def generate_points(scan_dir):
     # read a scan image
     image = io.imread(image_name)
     dim   = image.shape
+    image = image[::PIXEL_SKIP,...]
     angle = -base_angle * i
 
     # generate points for that image and add to point cloud
-    pixels        = detect_laser_pixels(image, dim)
-    screen_points = pixels_to_screen_points(pixels, dim)
-    world_points  = screen_points_to_laser_plane(screen_points)
-    object_points = world_points_to_object_points(world_points, angle)
+    start                = time.time()
+    pixels               = detect_laser_pixels(image)
+    time_pixels         += time.time() - start
+
+    start                = time.time()
+    screen_points        = pixels_to_screen_points(pixels, dim)
+    time_screen_points  += time.time() - start
+
+    start                = time.time()
+    world_points         = screen_points_to_laser_plane(screen_points)
+    time_world_points  += time.time() - start
+
+    start                = time.time()
+    object_points        = world_points_to_object_points(world_points, angle)
+    time_object_points  += time.time() - start
+
     points.extend(object_points)
+
+  print("time_pixels =", time_pixels)
+  print("time_screen_points =", time_screen_points)
+  print("time_world_points =", time_world_points)
+  print("time_object_points =", time_object_points)
 
   return points
 

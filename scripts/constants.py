@@ -2,6 +2,10 @@ import numpy as np
 
 DEBUG = False
 
+LASER_THRESHOLD = 100 # arbitrary
+WINDOW_LEN      = 5   # MUST BE ODD!
+PIXEL_SKIP      = 2
+
 ## SCAN CONSTANTS (all units in meters) ##
 
 # taken from blender object properties
