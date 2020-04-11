@@ -117,7 +117,7 @@ def generate_points(scan_dir):
 
     start                = time.time()
     world_points         = screen_points_to_laser_plane(screen_points)
-    time_world_points  += time.time() - start
+    time_world_points   += time.time() - start
 
     start                = time.time()
     object_points        = world_points_to_object_points(world_points, angle)
@@ -166,15 +166,15 @@ def add_debugging_visualizations(points):
   return points
 
 def main():
-  if len(sys.argv) > 2:
-    print("Usage: py points.py <scan_dir>")
+  if len(sys.argv) != 2:
+    print("Usage: python points.py <scan_dir>")
     exit(-1)
-  scan_dir = '../scan' if len(sys.argv) == 1 else sys.argv[1]
+  scan_dir = sys.argv[1]
   if not os.path.isdir(scan_dir):
-    print("Error: scan_dir argument is not a valid directory")
+    print("Error: scan_dir argument (%s) is not a valid directory" % scan_dir)
     exit(-1)
   if len(os.listdir(scan_dir)) == 0:
-    print("Error: scan_dir argument does not contain any files")
+    print("Error: scan_dir argument (%s) does not contain any files" % scan_dir)
     exit(-1)
   print("Using image scan directory " + scan_dir)
 
