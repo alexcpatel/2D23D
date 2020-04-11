@@ -1,3 +1,4 @@
 {
-  "python.formatting.provider": "black"
+    "python.pythonPath": "C:\\Users\\Alex Patel\\AppData\\Local\\Programs\\Python\\Python36\\python.exe",
+    "python.linting.enabled": false
 }

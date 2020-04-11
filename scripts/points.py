@@ -28,20 +28,20 @@ def detect_laser_pixels(image, dim):
 # in world space as a numpy array
 # RETURNS: list of screen points
 def pixels_to_screen_points(pixels, dim):
+  camera_sensor_height = CAMERA_SENSOR_WIDTH * (dim[0] / dim[1])
   iw, ih  = 1.0 / dim[1], 1.0 / dim[0]
-  tx, ty  = iw * CAMERA_SENSOR_WIDTH, ih * CAMERA_SENSOR_HEIGHT
-  ox, oy  = CAMERA_SENSOR_WIDTH * 0.5, CAMERA_SENSOR_HEIGHT * 0.5
-  npixels = len(pixels)
 
   # convert pixels to camera space
-  camera_points = np.zeros((4, npixels))
-  for i in range(npixels):
-    x, y = pixels[i][0] * tx - ox, pixels[i][1] * ty - oy
-    camera_points[:,i] = np.array([x, -y, -CAMERA_FOCAL_LENGTH, 1.00])
+  camera_points = np.zeros((4, len(pixels)))
+  for i in range(len(pixels)):
+    px, py = pixels[i][0] + 0.5, pixels[i][1] + 0.5
+    nx, ny = px * iw - 0.5, py * ih - 0.5
+    cx, cy = nx * CAMERA_SENSOR_WIDTH, ny * camera_sensor_height
+    camera_points[:,i] = np.array([cx, -cy, -CAMERA_FOCAL_LENGTH, 1.00])
 
   # convert pixels to world space
-  screen_points = (CAMERA_TO_WORLD @ camera_points)[0:3,:]
-  return np.ndarray.tolist(screen_points.T)
+  screen_points = (CAMERA_TO_WORLD @ camera_points)[0:3,:].T
+  return np.ndarray.tolist(screen_points)
 
 # Perform ray plane intersection from the camera origin through
 # each screen point to the laser plane to determine the point of
@@ -102,7 +102,7 @@ def generate_points(scan_dir):
     screen_points = pixels_to_screen_points(pixels, dim)
     world_points  = screen_points_to_laser_plane(screen_points)
     object_points = world_points_to_object_points(world_points, angle)
-    points.extend(world_points)
+    points.extend(object_points)
 
   return points
 
@@ -150,11 +150,11 @@ def main():
   if len(os.listdir(scan_dir)) == 0:
     print("Error: scan_dir argument does not contain any files")
     exit(-1)
-
-  print(scan_dir)
+  print("Using image scan directory " + scan_dir)
 
   points = generate_points(scan_dir)
-  points = add_debugging_visualizations(points)
+  if DEBUG:
+    points = add_debugging_visualizations(points)
 
   print("%d points generated" % len(points))
   print("converting points to numpy array...")
@@ -164,6 +164,9 @@ def main():
   pcl.points = o3d.utility.Vector3dVector(np_points)
   print("writing pcd file...")
   o3d.io.write_point_cloud("test.pcd", pcl)
+
+  pcd = o3d.io.read_point_cloud("test.pcd")
+  o3d.visualization.draw_geometries([pcd])
 
 if __name__ == "__main__":
   main()
