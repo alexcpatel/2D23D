@@ -25,6 +25,12 @@ def main():
 
     # orient the normals inwards
     pcd.orient_normals_towards_camera_location([0, 0, 0.5])
+    # reorient normals
+    normals = []
+    for normal in pcd.normals:
+        normals.append(normal * -1)
+    pcd.normals = o3d.utility.Vector3dVector(np.asarray(normals, dtype=np.float64))
+
     if DEBUG:
         print(pcd)
         o3d.visualization.draw_geometries([pcd])
