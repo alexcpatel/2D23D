@@ -189,9 +189,9 @@ def main():
   print("formatting pcd file...")
   pcl.points = o3d.utility.Vector3dVector(np_points)
   print("writing pcd file...")
-  o3d.io.write_point_cloud("vase_1000_90y.pcd", pcl)
+  o3d.io.write_point_cloud("sphere_1000_orig.pcd", pcl)
 
-  pcd = o3d.io.read_point_cloud("vase_1000_90y.pcd")
+  pcd = o3d.io.read_point_cloud("sphere_1000_orig.pcd")
   o3d.visualization.draw_geometries([pcd])
 
 if __name__ == "__main__":
