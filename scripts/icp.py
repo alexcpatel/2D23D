@@ -111,7 +111,7 @@ def scale_aligned_pcd(source, target, delta, max_iter):
     return (scale, source_copy)
 
 
-def run_icp(source_pcd, target_pcd): # takes pcd filenames as input
+def run_icp(source_pcd, dest_pcd): # takes pcd filenames as input
     voxel_size = 0.05  # 0.05 means 5cm for the dataset, note monkey is 2m wide in Blender
     source, target, source_down, target_down, source_fpfh, target_fpfh = \
             prepare_dataset(voxel_size, source_pcd, dest_pcd, 1)

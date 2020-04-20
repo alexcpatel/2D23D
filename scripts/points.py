@@ -125,9 +125,9 @@ def generate_points(scan_dir):
 
     points.extend(object_points)
 
-  print("time_pixels =", time_pixels)
+  print("time_pixels        =", time_pixels)
   print("time_screen_points =", time_screen_points)
-  print("time_world_points =", time_world_points)
+  print("time_world_points  =", time_world_points)
   print("time_object_points =", time_object_points)
 
   return points
