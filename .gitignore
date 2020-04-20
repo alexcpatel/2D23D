@@ -3,3 +3,4 @@ scan*
 scripts/__pycache__
 *.blend1
 *.mtl
+scripts/temp
