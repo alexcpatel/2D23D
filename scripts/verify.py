@@ -8,7 +8,9 @@ from sklearn.neighbors import KDTree
 from numpy import dot
 from math import sqrt
 
-def pointTriangleDistance(TRI, P):
+# code adapted from generous Gwolyn Fischer on github to perform
+# point-triangle distance queries
+def point_triangle_distance(TRI, P):
     # function [dist,PP0] = pointTriangleDistance(TRI,P)
     # calculate distance between a point and a triangle in 3D
     # SYNTAX
@@ -256,35 +258,13 @@ def pointTriangleDistance(TRI, P):
 def distance_to_mesh(point, triangles):
     min_dist = -1
     for triangle in triangles:
-        alt_triangle = np.asarray([triangle[0], triangle[2], triangle[1]])
-        dist, _ = pointTriangleDistance(triangle, point)
+        dist, _ = point_triangle_distance(triangle, point)
         if min_dist < 0 or dist < min_dist:
             min_dist = dist
     return min_dist
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--debug", action="store_true", help="debugging mode")
-    parser.add_argument("-s", "--scan_filename", dest="scan_filename", required=True, help="<scan_filename>")
-    parser.add_argument("-t", "--truth_filename",  dest="truth_filename", required=True, help="<truth_filename>")
-    parser.add_argument("-k", "--num_kd_tree_neighbors", dest="num_kd_tree_neighbors", required=False, help="[num_kd_tree_neighbors]")
-    parser.add_argument("-i", "--num_ipc_points", dest="num_ipc_points", required=False, help="[num_ipc_points]")
-
-    DEFAULT_NUM_ICP_POINTS    = 200000
-    DEFAULT_KD_TREE_NEIGHBORS = 10
-
-    args                  = parser.parse_args()
-    scan_filename         = args.scan_filename
-    truth_filename        = args.truth_filename
-    num_ipc_points        = int(args.num_ipc_points) \
-                            if args.num_ipc_points != None \
-                            else DEFAULT_NUM_ICP_POINTS
-    num_kd_tree_neighbors = int(args.num_kd_tree_neighbors) \
-                            if args.num_kd_tree_neighbors != None \
-                            else DEFAULT_KD_TREE_NEIGHBORS
-    DEBUG                 = args.debug
-
-    if DEBUG:
+def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose):
+    if verbose:
         o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
 
     # load meshes
@@ -371,7 +351,7 @@ def main():
     total_dist            = 0
 
     for i in range(num_points):
-        if DEBUG and i % 10000 == 0:
+        if verbose and i % 10000 == 0:
             print(i)
         dist = distance_to_mesh(source_points[i], nearest_triangles[i])
         if dist > two_percent_dist:
@@ -399,6 +379,30 @@ axis to the ground truth model.")
 axis to the ground truth model.")
     else:
         print("Scan meets accuracy requirements!")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--verbose", action="store_true", help="verbose mode")
+    parser.add_argument("-s", "--scan_filename", dest="scan_filename", required=True, help="<scan_filename>")
+    parser.add_argument("-t", "--truth_filename",  dest="truth_filename", required=True, help="<truth_filename>")
+    parser.add_argument("-k", "--num_kd_tree_neighbors", dest="num_kd_tree_neighbors", required=False, help="[num_kd_tree_neighbors]")
+    parser.add_argument("-i", "--num_ipc_points", dest="num_ipc_points", required=False, help="[num_ipc_points]")
+
+    DEFAULT_NUM_ICP_POINTS    = 200000
+    DEFAULT_KD_TREE_NEIGHBORS = 10
+
+    args                  = parser.parse_args()
+    scan_filename         = args.scan_filename
+    truth_filename        = args.truth_filename
+    num_ipc_points        = int(args.num_ipc_points) \
+                            if args.num_ipc_points != None \
+                            else DEFAULT_NUM_ICP_POINTS
+    num_kd_tree_neighbors = int(args.num_kd_tree_neighbors) \
+                            if args.num_kd_tree_neighbors != None \
+                            else DEFAULT_KD_TREE_NEIGHBORS
+    verbose               = args.verbose
+
+    run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose)
 
 if __name__ == "__main__":
     main()

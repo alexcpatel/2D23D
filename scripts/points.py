@@ -8,21 +8,21 @@ from constants import *
 
 # detects pixels along the laser line in the image
 # RETURNS: list of laser pixels as (x, y) tuples
-def detect_laser_pixels(image):
+def detect_laser_pixels(image, laser_threshold, window_len):
   # extract element-wise channel diff intensity
   nonred     = (image[...,1] >> 1) + (image[...,2] >> 1)
   intensity  = np.maximum(image[...,0], nonred) - nonred
   rows, cols = intensity.shape
 
   # apply hamming window to smooth intensity rows
-  window      = np.hamming(WINDOW_LEN)
+  window      = np.hamming(window_len)
   intensity   = np.reshape(intensity, (rows*cols,))
   filtered    = np.convolve(intensity, window, mode='same')
 
   # compute row-wise local max intensity pixels
   mask        = np.zeros((rows*cols,), dtype=np.bool)
   mask[1:-1]  = np.diff(np.sign(np.diff(filtered))) < 0
-  mask       &= intensity > LASER_THRESHOLD
+  mask       &= intensity > laser_threshold
   mask        = np.reshape(mask, (rows,cols))
 
   return np.ndarray.tolist(np.argwhere(mask))
@@ -30,14 +30,14 @@ def detect_laser_pixels(image):
 # converts a list of pixels to corresponding screen points
 # in world space as a numpy array
 # RETURNS: list of screen points
-def pixels_to_screen_points(pixels, dim):
+def pixels_to_screen_points(pixels, dim, pixel_skip):
   camera_sensor_height = CAMERA_SENSOR_WIDTH * (dim[0] / dim[1])
   iw, ih  = 1.0 / dim[1], 1.0 / dim[0]
 
   # convert pixels to camera space
   camera_points = np.zeros((4, len(pixels)))
   for i in range(len(pixels)):
-    px, py = pixels[i][1] + 0.5, pixels[i][0] * PIXEL_SKIP + 0.5
+    px, py = pixels[i][1] + 0.5, pixels[i][0] * pixel_skip + 0.5
     nx, ny = px * iw - 0.5, py * ih - 0.5
     cx, cy = nx * CAMERA_SENSOR_WIDTH, ny * camera_sensor_height
     camera_points[:,i] = np.array([cx, -cy, -CAMERA_FOCAL_LENGTH, 1.00])
@@ -85,7 +85,7 @@ def world_points_to_object_points(world_points, angle):
 ## POINT CLOUD GENERATION SCRIPT ##
 
 # generate all points for point cloud from scan
-def generate_points(scan_dir):
+def generate_points(scan_dir, laser_threshold, window_len, pixel_skip, verbose):
   _, _, image_names = next(os.walk(scan_dir), (None, None, []))
   image_num = len(image_names)
   base_angle = (2.0 * math.pi) / image_num
@@ -98,21 +98,21 @@ def generate_points(scan_dir):
   points = []
   for i in range(image_num):
     image_name = os.path.join(scan_dir, image_names[i])
-    print("processing image %d, file %s..." % (i, image_name))
+    if verbose: print("processing image %d, file %s..." % (i, image_name))
 
     # read a scan image
     image = io.imread(image_name)
     dim   = image.shape
-    image = image[::PIXEL_SKIP,...]
+    image = image[::pixel_skip,...]
     angle = -base_angle * i
 
     # generate points for that image and add to point cloud
     start                = time.time()
-    pixels               = detect_laser_pixels(image)
+    pixels               = detect_laser_pixels(image, laser_threshold, window_len)
     time_pixels         += time.time() - start
 
     start                = time.time()
-    screen_points        = pixels_to_screen_points(pixels, dim)
+    screen_points        = pixels_to_screen_points(pixels, dim, pixel_skip)
     time_screen_points  += time.time() - start
 
     start                = time.time()
@@ -125,45 +125,26 @@ def generate_points(scan_dir):
 
     points.extend(object_points)
 
-  print("time_pixels        =", time_pixels)
-  print("time_screen_points =", time_screen_points)
-  print("time_world_points  =", time_world_points)
-  print("time_object_points =", time_object_points)
+  if verbose:
+    print("time_pixels        =", time_pixels)
+    print("time_screen_points =", time_screen_points)
+    print("time_world_points  =", time_world_points)
+    print("time_object_points =", time_object_points)
 
   return points
 
-def add_debugging_visualizations(points):
-  # add camera position to point cloud
-  points.append(CAMERA_POS)
+def run_points(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, verbose):
+  points = generate_points(scan_dir, laser_threshold, window_len, pixel_skip, verbose)
+  if verbose: print("%d points generated" % len(points))
 
-  # add laser plane normal to point cloud
-  step = 5.0 / 100.0
-  ray = LASER_N
-  for i in range(100):
-    time = i * step
-    points.append(LASER_P + ray * time)
+  np_points = np.asarray(points, dtype=np.float64)
+  pcl = o3d.geometry.PointCloud()
+  pcl.points = o3d.utility.Vector3dVector(np_points)
+  if verbose: print("writing pcd file %s...", out_filename)
+  o3d.io.write_point_cloud(out_filename, pcl)
 
-  # add laser plane grid to point cloud
-  step1 = 5.0 / 10.0
-  ray1 = norm(LASER_POS - LASER_N * np.dot(LASER_POS, LASER_N))
-  ray2 = norm(np.cross(LASER_N, ray1))
-  for i in range(10):
-    for j in range(10):
-      x, y = j * step1 - 2.5, i * step1 - 2.5
-      points.append(LASER_P + x * ray1 + y * ray2)
-
-  # add xyz axes to point cloud
-  stepxyz = 5.0 / 20.0
-  rayx = np.array([1.0, 0.0, 0.0])
-  rayy = np.array([0.0, 1.0, 0.0])
-  rayz = np.array([0.0, 0.0, 1.0])
-  for i in range(20):
-    amt = i * stepxyz - 2.5
-    points.append(amt * rayx)
-    points.append(amt * rayy)
-    points.append(amt * rayz)
-
-  return points
+  pcd = o3d.io.read_point_cloud(out_filename)
+  o3d.visualization.draw_geometries([pcd])
 
 def main():
   if len(sys.argv) != 2:
@@ -178,21 +159,41 @@ def main():
     exit(-1)
   print("Using image scan directory " + scan_dir)
 
-  points = generate_points(scan_dir)
-  if DEBUG:
-    points = add_debugging_visualizations(points)
-
-  print("%d points generated" % len(points))
-  print("converting points to numpy array...")
-  np_points = np.asarray(points, dtype=np.float64)
-  pcl = o3d.geometry.PointCloud()
-  print("formatting pcd file...")
-  pcl.points = o3d.utility.Vector3dVector(np_points)
-  print("writing pcd file...")
-  o3d.io.write_point_cloud("monkey_misalign_02x.pcd", pcl)
-
-  pcd = o3d.io.read_point_cloud("monkey_misalign_02x.pcd")
-  o3d.visualization.draw_geometries([pcd])
+  run_points(scan_dir, "test.pcd", DEFAULT_LASER_THRESHOLD, DEFAULT_WINDOW_LEN,
+             DEFAULT_PIXEL_SKIP, DEBUG)
 
 if __name__ == "__main__":
   main()
+
+# def add_debugging_visualizations(points):
+#   # add camera position to point cloud
+#   points.append(CAMERA_POS)
+
+#   # add laser plane normal to point cloud
+#   step = 5.0 / 100.0
+#   ray = LASER_N
+#   for i in range(100):
+#     time = i * step
+#     points.append(LASER_P + ray * time)
+
+#   # add laser plane grid to point cloud
+#   step1 = 5.0 / 10.0
+#   ray1 = norm(LASER_POS - LASER_N * np.dot(LASER_POS, LASER_N))
+#   ray2 = norm(np.cross(LASER_N, ray1))
+#   for i in range(10):
+#     for j in range(10):
+#       x, y = j * step1 - 2.5, i * step1 - 2.5
+#       points.append(LASER_P + x * ray1 + y * ray2)
+
+#   # add xyz axes to point cloud
+#   stepxyz = 5.0 / 20.0
+#   rayx = np.array([1.0, 0.0, 0.0])
+#   rayy = np.array([0.0, 1.0, 0.0])
+#   rayz = np.array([0.0, 0.0, 1.0])
+#   for i in range(20):
+#     amt = i * stepxyz - 2.5
+#     points.append(amt * rayx)
+#     points.append(amt * rayy)
+#     points.append(amt * rayz)
+
+#   return points
