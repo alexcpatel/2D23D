@@ -48,7 +48,7 @@ def execute_global_registration(source_down, target_down, source_fpfh,
     return result
 
 def execute_local_registration(source, target, source_fpfh, target_fpfh, voxel_size, result_global):
-    distance_threshold = voxel_size * 0.4
+    distance_threshold = voxel_size * 0.2
     print("Local Point-to-point ICP registration with distance threshold %.3f." % distance_threshold)
     result = o3d.registration.registration_icp(
         source, target, distance_threshold, result_global.transformation,
@@ -111,15 +111,7 @@ def scale_aligned_pcd(source, target, delta, max_iter):
     return (scale, source_copy)
 
 
-if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python icp.py <pcd_1> <pcd_2> <output_pcd>")
-        exit(-1)
-    
-    source_pcd = sys.argv[1]
-    dest_pcd = sys.argv[2]
-    output_pcd = sys.argv[3]
-
+def run_icp(source_pcd, target_pcd): # takes pcd filenames as input
     voxel_size = 0.05  # 0.05 means 5cm for the dataset, note monkey is 2m wide in Blender
     source, target, source_down, target_down, source_fpfh, target_fpfh = \
             prepare_dataset(voxel_size, source_pcd, dest_pcd, 1)
@@ -132,19 +124,33 @@ if __name__ == "__main__":
 
     result_local = execute_local_registration(source, target, source_fpfh, target_fpfh,
                                      voxel_size, result_global)
+
     print("Transformation matrix: ")
     print(result_local.transformation)
     draw_registration_result(source, target, result_local.transformation)
 
+    return (source, target, result_local.transformation)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        print("Usage: python icp.py <pcd_1> <pcd_2> <output_pcd>")
+        exit(-1)
+    
+    source_pcd = sys.argv[1]
+    dest_pcd = sys.argv[2]
+    output_pcd = sys.argv[3]
+
+    (source, target, transformation) = run_icp(source_pcd, dest_pcd)
+    
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
     print("Point cloud distance:")
     print(pcd_distance(source_temp, target_temp))
-    # source_temp.transform(result_local.transformation)
+    # source_temp.transform(transformation)
     # (scale, scaled_source) = scale_aligned_pcd(source_temp, target_temp, 0.01, 10000)
     # print("Scale: " + str(scale))
 
-    output_registration_result(source, target, output_pcd, result_local.transformation)
+    output_registration_result(source, target, output_pcd, transformation)
 
     # Scaling pipeline
     # if (scale > 1.05 or scale < 0.95): # iterate until proper scale
