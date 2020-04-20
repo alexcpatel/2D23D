@@ -24,7 +24,7 @@ def main():
     pcd.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
 
     # orient the normals inwards
-    pcd.orient_normals_towards_camera_location([0, 0, 0.5])
+    pcd.orient_normals_towards_camera_location([0, 0, 1])
     # reorient normals
     normals = []
     for normal in pcd.normals:

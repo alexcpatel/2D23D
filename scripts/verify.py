@@ -262,25 +262,26 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", action="store_true", help="debugging mode")
     parser.add_argument("-s", "--scanfilename", dest="scanfilename", required=True, help="<scanfilename>")
-    parser.add_argument("-g", "--groundtruthfilename",  dest="groundtruthfilename", required=True, help="<groundtruthfilename>")
-    parser.add_argument("-n", "--numpoints", dest="numpoints", required=False, help="[numpoints]")
+    parser.add_argument("-t", "--groundtruthfilename",  dest="groundtruthfilename", required=True, help="<groundtruthfilename>")
+    parser.add_argument("-i", "--numicppoints", dest="numicppoints", required=False, help="[numicppoints]")
 
-    args = parser.parse_args()
-    scanfilename = args.scanfilename
+    DEFAULT_ICP_NUM_POINTS = 100000
+
+    args                = parser.parse_args()
+    scanfilename        = args.scanfilename
     groundtruthfilename = args.groundtruthfilename
-    num_points = args.numpoints if args.numpoints != None else 1000
-    DEBUG = args.debug
+    icp_num_points      = int(args.numicppoints) if args.numicppoints != None else DEFAULT_ICP_NUM_POINTS
+    DEBUG               = args.debug
 
     if DEBUG:
         o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
 
-    voxel_size = 0.05
-
     # load meshes
+    voxel_size  = 0.05
     source_mesh = o3d.io.read_triangle_mesh(scanfilename)
     target_mesh = o3d.io.read_triangle_mesh(groundtruthfilename)
-    source_pcd  = source_mesh.sample_points_uniformly(number_of_points = 1000000)
-    target_pcd  = target_mesh.sample_points_uniformly(number_of_points = 1000000)
+    source_pcd  = source_mesh.sample_points_uniformly(number_of_points = icp_num_points)
+    target_pcd  = target_mesh.sample_points_uniformly(number_of_points = icp_num_points)
     source_down, source_fpfh = icp.preprocess_point_cloud(source_pcd, voxel_size)
     target_down, target_fpfh = icp.preprocess_point_cloud(target_pcd, voxel_size)
 
@@ -288,32 +289,75 @@ def main():
     result_global = icp.execute_global_registration(source_down, target_down, source_fpfh, target_fpfh, voxel_size)
     result_local  = icp.execute_local_registration(source_pcd, target_pcd, source_fpfh, target_fpfh, voxel_size, result_global)
     
+    # preprocess mesh to correct it
+    source_mesh.remove_degenerate_triangles()
+    target_mesh.remove_degenerate_triangles()
+    source_mesh.remove_duplicated_triangles()
+    target_mesh.remove_duplicated_triangles()
+    source_mesh.remove_duplicated_vertices()
+    target_mesh.remove_duplicated_vertices()
+    source_mesh.remove_non_manifold_edges()
+    target_mesh.remove_non_manifold_edges()
+    source_mesh.remove_unreferenced_vertices()
+    target_mesh.remove_unreferenced_vertices()
+
     # transform source mesh to align with target
     source_mesh.transform(result_local.transformation)
+
+    # visualize aligned meshes
+    # o3d.visualization.draw_geometries([source_mesh, target_mesh])
 
     # extract points and triangles from source and target
     source_points    = np.asarray(source_mesh.vertices)
     target_points    = np.asarray(target_mesh.vertices)
     target_triangles = np.asarray(target_mesh.triangles)
 
-    # get the distance from each point to the
-    num_source_points = source_points.shape[0]
-    max_dist = 0
-    total_dist = 0
-    for i in range(0, num_source_points, num_source_points//num_points):
+    # ACCURACY REQUIREMENT:
+    # 100% of non-occluded points must be within 5% of the longest axis to the ground truth model.
+    # 90% of non-occluded points must be within 2% of the longest axis to the ground truth model.
+
+    # determine longest axis cutoffs for ground truth mesh
+    target_bbox       = target_mesh.get_axis_aligned_bounding_box()
+    extent            = target_bbox.get_extent()
+    longest_axis      = max(max(extent[0], extent[1]), extent[2])
+    two_percent_dist  = 0.02 * longest_axis
+    five_percent_dist = 0.05 * longest_axis
+
+    # get the distance from each vertex of the scan mesh to the ground truth mesh
+    num_points            = source_points.shape[0]
+    num_two_percent_dist  = 0
+    num_five_percent_dist = 0
+    max_dist              = 0
+    total_dist            = 0
+
+    for i in range(num_points):
         if DEBUG:
             print(i)
         point = source_points[i]
         dist = distance_to_mesh(point, target_points, target_triangles)
+        if dist > two_percent_dist:
+            num_two_percent_dist += 1
+        if dist > five_percent_dist:
+            num_five_percent_dist += 1
         total_dist += dist
         if dist > max_dist:
             max_dist = dist
-    avg_dist = total_dist / num_source_points
+    avg_dist = total_dist / num_points
 
-    print("num_points: ", num_source_points, ", max_dist: ", max_dist, ", avg_dist: ", avg_dist)
+    print("num_points: ", num_points,
+          ", max_dist: ", max_dist,
+          ", avg_dist: ", avg_dist,
+          ", num_two_percent_dist: ", num_two_percent_dist,
+          ", num_five_percent_dist: ", num_five_percent_dist)
 
-    # show both aligned scan and ground truth
-    # o3d.visualization.draw_geometries([source_mesh, target_mesh])
+    if num_five_percent_dist > 0:
+        print("Scan does not meet accuracy requirement:\n",
+              "100% of non-occluded points must be within 5% of the longest axis to the ground truth model.")
+    elif num_two_percent_dist > 0.1 * num_points:
+        print("Scan does not meet accuracy requirement:\n",
+              "90% of non-occluded points must be within 2% of the longest axis to the ground truth model.")
+    else:
+        print("Scan meets accuracy requirements!")
 
 if __name__ == "__main__":
     main()
