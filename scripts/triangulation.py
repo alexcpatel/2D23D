@@ -2,7 +2,7 @@ import argparse
 import open3d as o3d
 import numpy as np
 
-def run_triangulation(in_filename, out_filename, verbose):
+def run_triangulation(in_filename, out_filename, verbose, display):
     if verbose: o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
 
     pcd = o3d.io.read_point_cloud(in_filename)
@@ -19,7 +19,9 @@ def run_triangulation(in_filename, out_filename, verbose):
         normals.append(normal * -1)
     pcd.normals = o3d.utility.Vector3dVector(np.asarray(normals, dtype=np.float64))
 
-    if verbose: o3d.visualization.draw_geometries([pcd])
+    if display: 
+        if verbose: print("Displaying input pcd file for triangulation...")
+        o3d.visualization.draw_geometries([pcd])
 
     # poisson reconstruction
     mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
@@ -37,7 +39,7 @@ def run_triangulation(in_filename, out_filename, verbose):
     eps = np.mean(pcd.compute_nearest_neighbor_distance())
     mesh = mesh.merge_close_vertices(eps)
 
-    if verbose: o3d.visualization.draw_geometries([mesh])
+    if display: o3d.visualization.draw_geometries([mesh])
 
     # store file
     o3d.io.write_triangle_mesh(out_filename, mesh)
@@ -51,7 +53,7 @@ def main():
     filename = args.filename
     verbose  = args.verbose
 
-    run_triangulation(filename + ".pcd", filename + ".obj", verbose)
+    run_triangulation(filename + ".pcd", filename + ".obj", verbose, False)
 
 if __name__ == "__main__":
     main()

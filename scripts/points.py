@@ -133,7 +133,7 @@ def generate_points(scan_dir, laser_threshold, window_len, pixel_skip, image_ski
 
   return points
 
-def run_points(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, image_skip, verbose):
+def run_points(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, image_skip, verbose, display):
   print(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, image_skip, verbose)
 
   points = generate_points(scan_dir, laser_threshold, window_len, pixel_skip, image_skip, verbose)
@@ -145,8 +145,9 @@ def run_points(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, 
   if verbose: print("writing pcd file %s..." % out_filename)
   o3d.io.write_point_cloud(out_filename, pcl)
 
-  # pcd = o3d.io.read_point_cloud(out_filename)
-  # o3d.visualization.draw_geometries([pcd])
+  if display:
+    pcd = o3d.io.read_point_cloud(out_filename)
+    o3d.visualization.draw_geometries([pcd])
 
 def main():
   if len(sys.argv) != 2:

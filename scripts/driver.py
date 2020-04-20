@@ -10,8 +10,9 @@ import verify
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="verbose mode")
+    parser.add_argument("-d", "--display", dest="display", action="store_true", help="display mode")
     parser.add_argument("-s", "--scan_directory", dest="main_directory", required=True, help="<scan_directory>")
-    parser.add_argument("-o", "--output_filename", dest="out_filename", required=False, help="<output_filename>")
+    parser.add_argument("-o", "--output_filename", dest="out_filename", required=False, help="[output_filename (otherwise <scan_directory>.pcd)]")
 
     # point cloud arguments
     parser.add_argument("-l", "--laser_threshold", dest="laser_threshold", required=False, help="[laser_threshold]")
@@ -50,6 +51,7 @@ def main():
     num_kd_tree_neighbors   = int(args.num_kd_tree_neighbors) if args.num_kd_tree_neighbors else DEFAULT_KD_TREE_NEIGHBORS
     
     verbose                 = args.verbose
+    display                 = args.display
 
     # parses directory and create point clouds
     # temporarily stores as pcd files under temp directory
@@ -61,7 +63,7 @@ def main():
     for scan_dir in scan_dirs:
         pcd_out_filename = os.path.join(TEMP_DIR, os.path.basename(scan_dir) + ".pcd")
         points.run_points(os.path.join(main_directory, scan_dir), pcd_out_filename,
-                          laser_threshold, window_len, pixel_skip, image_skip, verbose)
+                          laser_threshold, window_len, pixel_skip, image_skip, verbose, display)
 
     # perform icps on all pcd files under temp directory
     # source_pcd becomes the icp'ed point cloud
@@ -69,15 +71,15 @@ def main():
     source_pcd = os.path.join(TEMP_DIR, pcd_files[0])
     for i in range(1, len(pcd_files)):
         dest_pcd = os.path.join(TEMP_DIR, pcd_files[i])
-        (source, target, transformation) = icp.run_icp(source_pcd, dest_pcd, verbose)
-        icp.output_registration_result(source, target, source_pcd, transformation)
+        (source, target, transformation) = icp.run_icp(source_pcd, dest_pcd, verbose, display)
+        icp.output_registration_result(source, target, source_pcd, transformation, display)
     
     # perform triangulation
-    triangulation.run_triangulation(source_pcd, out_filename, verbose)
+    triangulation.run_triangulation(source_pcd, out_filename, verbose, display)
 
     # perform verification
     if truth_filename:
-        verify.run_verify(out_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose)
+        verify.run_verify(out_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose, display)
 
 if __name__ == "__main__":
     main()

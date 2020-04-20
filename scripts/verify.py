@@ -255,15 +255,17 @@ def point_triangle_distance(TRI, P):
     PP0 = B + s * E0 + t * E1
     return dist, PP0
 
-def distance_to_mesh(point, triangles):
+def distance_to_mesh(two_percent_dist, five_percent_distpoint, point, triangles):
     min_dist = -1
     for triangle in triangles:
         dist, _ = point_triangle_distance(triangle, point)
+        if dist < two_percent_dist:
+            return dist
         if min_dist < 0 or dist < min_dist:
             min_dist = dist
     return min_dist
 
-def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose):
+def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose, display):
     if verbose:
         o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
 
@@ -276,15 +278,15 @@ def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighb
     target_pcd  = target_mesh.sample_points_uniformly(
         number_of_points=num_ipc_points)
     source_down, source_fpfh = icp.preprocess_point_cloud(
-        source_pcd, voxel_size)
+        source_pcd, voxel_size, verbose, display)
     target_down, target_fpfh = icp.preprocess_point_cloud(
-        target_pcd, voxel_size)
+        target_pcd, voxel_size, verbose, display)
 
     # find transformation between source and target
     result_global = icp.execute_global_registration(source_down, target_down,
-        source_fpfh, target_fpfh, voxel_size)
+        source_fpfh, target_fpfh, voxel_size, verbose)
     result_local  = icp.execute_local_registration(source_pcd, target_pcd,
-        source_fpfh, target_fpfh, voxel_size, result_global)
+        source_fpfh, target_fpfh, voxel_size, result_global, verbose)
     
     # preprocess mesh to correct it
     source_mesh.remove_degenerate_triangles()
@@ -339,7 +341,7 @@ def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighb
     # determine longest axis cutoffs for ground truth mesh
     target_bbox       = target_mesh.get_axis_aligned_bounding_box()
     extent            = target_bbox.get_extent()
-    longest_axis      = max(max(extent[0], extent[1]), extent[2])
+    longest_axis      = sqrt(extent[0]**2 + extent[1]**2 + extent[2]**2)
     two_percent_dist  = 0.02 * longest_axis
     five_percent_dist = 0.05 * longest_axis
 
@@ -347,28 +349,21 @@ def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighb
     num_points            = source_points.shape[0]
     num_two_percent_dist  = 0
     num_five_percent_dist = 0
-    max_dist              = 0
-    total_dist            = 0
 
     for i in range(num_points):
         if verbose and i % 10000 == 0:
-            print(i)
-        dist = distance_to_mesh(source_points[i], nearest_triangles[i])
+            print("%7d / %7d    \tvertices processed..." % (i, num_points))
+        dist = distance_to_mesh(two_percent_dist, five_percent_dist, source_points[i], nearest_triangles[i])
         if dist > two_percent_dist:
             num_two_percent_dist += 1
         if dist > five_percent_dist:
             num_five_percent_dist += 1
-        total_dist += dist
-        if dist > max_dist:
-            max_dist = dist
-    avg_dist = total_dist / num_points
 
-    print("num_points: ", num_points,
-          ", max_dist: ", max_dist,
-          ", avg_dist: ", avg_dist,
-          ", num_two_percent_dist: ", num_two_percent_dist,
-          ", num_five_percent_dist: ", num_five_percent_dist)
-
+    print("num_points: %d, num_two_percent_dist: %d (%f%%), num_five_percent_dist: %d (%f%%)" \
+          % (num_points,
+             num_two_percent_dist,  (num_two_percent_dist  / num_points) * 100.0,
+             num_five_percent_dist, (num_five_percent_dist / num_points) * 100.0))
+    
     if num_five_percent_dist > 0:
         print("Scan does not meet accuracy requirement:\n",
               "\t100% of non-occluded points must be within 5% of the longest \
@@ -402,7 +397,7 @@ def main():
                             else DEFAULT_KD_TREE_NEIGHBORS
     verbose               = args.verbose
 
-    run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose)
+    run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose, False)
 
 if __name__ == "__main__":
     main()
