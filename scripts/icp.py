@@ -63,7 +63,7 @@ def draw_registration_result(source, target, transformation):
     source_temp.transform(transformation)
     o3d.visualization.draw_geometries([source_temp, target_temp], width=1280, height=720)
 
-def output_registration_result(source, target, output_file, transformation):
+def output_registration_result(source, target, output_file, transformation, verbose):
     new_pcd = o3d.geometry.PointCloud()
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
@@ -71,7 +71,8 @@ def output_registration_result(source, target, output_file, transformation):
     new_pcd += source_temp
     new_pcd += target_temp
     o3d.io.write_point_cloud(output_file, new_pcd)
-    o3d.visualization.draw_geometries([new_pcd], width=1280, height=720)
+    if verbose:
+        o3d.visualization.draw_geometries([new_pcd], width=1280, height=720)
 
 def pcd_distance(source, target):
     return statistics.mean(source.compute_point_cloud_distance(target))
@@ -111,7 +112,7 @@ def scale_aligned_pcd(source, target, delta, max_iter):
     return (scale, source_copy)
 
 
-def run_icp(source_pcd, dest_pcd): # takes pcd filenames as input
+def run_icp(source_pcd, dest_pcd, verbose): # takes pcd filenames as input
     voxel_size = 0.05  # 0.05 means 5cm for the dataset, note monkey is 2m wide in Blender
     source, target, source_down, target_down, source_fpfh, target_fpfh = \
             prepare_dataset(voxel_size, source_pcd, dest_pcd, 1)
@@ -119,15 +120,17 @@ def run_icp(source_pcd, dest_pcd): # takes pcd filenames as input
     result_global = execute_global_registration(source_down, target_down,
                                                 source_fpfh, target_fpfh,
                                                 voxel_size)
-    draw_registration_result(source_down, target_down,
-                             result_global.transformation)
+    if verbose:
+        draw_registration_result(source_down, target_down,
+                                result_global.transformation)
 
     result_local = execute_local_registration(source, target, source_fpfh, target_fpfh,
                                      voxel_size, result_global)
 
-    print("Transformation matrix: ")
-    print(result_local.transformation)
-    draw_registration_result(source, target, result_local.transformation)
+    if verbose:
+        print("Transformation matrix: ")
+        print(result_local.transformation)
+        draw_registration_result(source, target, result_local.transformation)
 
     return (source, target, result_local.transformation)
 
