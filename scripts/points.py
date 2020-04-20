@@ -85,7 +85,7 @@ def world_points_to_object_points(world_points, angle):
 ## POINT CLOUD GENERATION SCRIPT ##
 
 # generate all points for point cloud from scan
-def generate_points(scan_dir, laser_threshold, window_len, pixel_skip, verbose):
+def generate_points(scan_dir, laser_threshold, window_len, pixel_skip, image_skip, verbose):
   _, _, image_names = next(os.walk(scan_dir), (None, None, []))
   image_num = len(image_names)
   base_angle = (2.0 * math.pi) / image_num
@@ -96,7 +96,7 @@ def generate_points(scan_dir, laser_threshold, window_len, pixel_skip, verbose):
   time_object_points = 0
 
   points = []
-  for i in range(image_num):
+  for i in range(0, image_num, image_skip):
     image_name = os.path.join(scan_dir, image_names[i])
     if verbose: print("processing image %d, file %s..." % (i, image_name))
 
@@ -133,18 +133,20 @@ def generate_points(scan_dir, laser_threshold, window_len, pixel_skip, verbose):
 
   return points
 
-def run_points(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, verbose):
-  points = generate_points(scan_dir, laser_threshold, window_len, pixel_skip, verbose)
+def run_points(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, image_skip, verbose):
+  print(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, image_skip, verbose)
+
+  points = generate_points(scan_dir, laser_threshold, window_len, pixel_skip, image_skip, verbose)
   if verbose: print("%d points generated" % len(points))
 
   np_points = np.asarray(points, dtype=np.float64)
   pcl = o3d.geometry.PointCloud()
   pcl.points = o3d.utility.Vector3dVector(np_points)
-  if verbose: print("writing pcd file %s...", out_filename)
+  if verbose: print("writing pcd file %s..." % out_filename)
   o3d.io.write_point_cloud(out_filename, pcl)
 
-  pcd = o3d.io.read_point_cloud(out_filename)
-  o3d.visualization.draw_geometries([pcd])
+  # pcd = o3d.io.read_point_cloud(out_filename)
+  # o3d.visualization.draw_geometries([pcd])
 
 def main():
   if len(sys.argv) != 2:
@@ -160,7 +162,7 @@ def main():
   print("Using image scan directory " + scan_dir)
 
   run_points(scan_dir, "test.pcd", DEFAULT_LASER_THRESHOLD, DEFAULT_WINDOW_LEN,
-             DEFAULT_PIXEL_SKIP, DEBUG)
+             DEFAULT_PIXEL_SKIP, 1, DEBUG)
 
 if __name__ == "__main__":
   main()

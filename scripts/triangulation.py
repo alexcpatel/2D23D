@@ -2,7 +2,7 @@ import argparse
 import open3d as o3d
 import numpy as np
 
-def run_triangluation(in_filename, out_filename, verbose):
+def run_triangulation(in_filename, out_filename, verbose):
     if verbose: o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
 
     pcd = o3d.io.read_point_cloud(in_filename)
@@ -51,7 +51,7 @@ def main():
     filename = args.filename
     verbose  = args.verbose
 
-    run_triangluation(filename + ".pcd", filename + ".obj", verbose)
+    run_triangulation(filename + ".pcd", filename + ".obj", verbose)
 
 if __name__ == "__main__":
     main()

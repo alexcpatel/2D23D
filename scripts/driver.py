@@ -17,6 +17,7 @@ def main():
     parser.add_argument("-l", "--laser_threshold", dest="laser_threshold", required=False, help="[laser_threshold]")
     parser.add_argument("-w", "--window_len", dest="window_len", required=False, help="[window_len]")
     parser.add_argument("-p", "--pixel_skip", dest="pixel_skip", required=False, help="[pixel_skip]")
+    parser.add_argument("-f", "--image_skip", dest="image_skip", required=False, help="[image_skip]")
 
     # verification arguments
     parser.add_argument("-t", "--ground_truth_filename",  dest="truth_filename", required=False, help="[ground_truth_filename (perform verification)]")
@@ -27,23 +28,26 @@ def main():
     main_directory            = args.main_directory
 
     TEMP_DIR                  = "temp"
-    DEFAULT_OUT_FILENAME      = os.path.join(args.main_directory, ".obj")
+    DEFAULT_OUT_FILENAME      = os.path.join(args.main_directory + ".obj")
 
     DEFAULT_LASER_THRESHOLD   = 100 # arbitrary
     DEFAULT_WINDOW_LEN        = 5   # MUST BE ODD!
     DEFAULT_PIXEL_SKIP        = 2
+    DEFAULT_IMAGE_SKIP        = 1
 
     DEFAULT_NUM_ICP_POINTS    = 200000
     DEFAULT_KD_TREE_NEIGHBORS = 10
 
-    laser_threshold         = args.laser_threshold       if args.laser_threshold       else DEFAULT_LASER_THRESHOLD
-    window_len              = args.window_len            if args.window_len            else DEFAULT_WINDOW_LEN
-    pixel_skip              = args.pixel_skip            if args.pixel_skip            else DEFAULT_PIXEL_SKIP
-    out_filename            = args.out_filename          if args.out_filename          else DEFAULT_OUT_FILENAME
+    laser_threshold         = int(args.laser_threshold)       if args.laser_threshold       else DEFAULT_LASER_THRESHOLD
+    window_len              = int(args.window_len)            if args.window_len            else DEFAULT_WINDOW_LEN
+    pixel_skip              = int(args.pixel_skip)            if args.pixel_skip            else DEFAULT_PIXEL_SKIP
+    image_skip              = int(args.image_skip)            if args.image_skip            else DEFAULT_IMAGE_SKIP
+
+    out_filename            = args.out_filename               if args.out_filename          else DEFAULT_OUT_FILENAME
 
     truth_filename          = args.truth_filename  
-    num_ipc_points          = args.num_ipc_points        if args.num_ipc_points        else DEFAULT_NUM_ICP_POINTS
-    num_kd_tree_neighbors   = args.num_kd_tree_neighbors if args.num_kd_tree_neighbors else DEFAULT_KD_TREE_NEIGHBORS
+    num_ipc_points          = int(args.num_ipc_points)        if args.num_ipc_points        else DEFAULT_NUM_ICP_POINTS
+    num_kd_tree_neighbors   = int(args.num_kd_tree_neighbors) if args.num_kd_tree_neighbors else DEFAULT_KD_TREE_NEIGHBORS
     
     verbose                 = args.verbose
 
@@ -52,27 +56,28 @@ def main():
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR)
     os.makedirs(TEMP_DIR)
-        
+
     scan_dirs = os.listdir(main_directory)
     for scan_dir in scan_dirs:
-        out_filename = os.path.join(TEMP_DIR, scan_dir, ".pcd")
-        run_points(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, verbose)
+        pcd_out_filename = os.path.join(TEMP_DIR, os.path.basename(scan_dir) + ".pcd")
+        points.run_points(os.path.join(main_directory, scan_dir), pcd_out_filename,
+                          laser_threshold, window_len, pixel_skip, image_skip, verbose)
 
     # perform icps on all pcd files under temp directory
     # source_pcd becomes the icp'ed point cloud
     pcd_files = os.listdir(TEMP_DIR)
-    source_pcd = pcd_files[0]
+    source_pcd = os.path.join(TEMP_DIR, pcd_files[0])
     for i in range(1, len(pcd_files)):
-        dest_pcd = pcd_files[i]
-        (source, target, transformation) = run_icp(source_pcd, dest_pcd, verbose)
-        output_registration_result(source, target, source_pcd, transformation)
+        dest_pcd = os.path.join(TEMP_DIR, pcd_files[i])
+        (source, target, transformation) = icp.run_icp(source_pcd, dest_pcd, verbose)
+        icp.output_registration_result(source, target, source_pcd, transformation)
     
     # perform triangulation
-    run_triangluation(source_pcd, out_filename, verbose)
+    triangulation.run_triangulation(source_pcd, out_filename, verbose)
 
     # perform verification
     if truth_filename:
-        run_verify(out_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose)
+        verify.run_verify(out_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose)
 
 if __name__ == "__main__":
     main()
