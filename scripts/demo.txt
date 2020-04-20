@@ -1,0 +1,29 @@
+// scanning realistic render
+python scripts/points.py scan/monkey_real/monkey_real_orig
+
+// icp for multiple scans
+python scripts/icp.py monkey_real_flip_manual.pcd monkey_real_orig_manual.pcd monkey_icp_1.pcd
+python scripts/icp.py monkey_real_90y_manual.pcd monkey_icp_1.pcd monkey_icp_2.pcd
+
+// icp edge cases
+// scaling
+python scripts/icp.py pcd_out/monkey_orig_07scale.pcd pcd_out/monkey_1000_orig.pcd test_scale.pcd
+// z-translation
+python scripts/icp.py pcd_out/monkey_orig_075z.pcd pcd_out/monkey_1000_orig.pcd test_translate.pcd
+// off center
+python scripts/icp.py pcd_out/monkey_offcenter_02x.pcd pcd_out/monkey_1000_orig.pcd test_offcenter.pcd
+
+// triangulation
+python scripts/triangulation.py -f monkey_icp_2
+
+// verification
+python scripts/verify.py -s monkey_icp_2.obj -t obj_in/suzanne.obj -d
+
+
+// Notes from final demo
+- example meshes be broken objects i.e. broken vase -> relate back to our story
+- videos due one week after presentation
+- presentation -> videos -> report
+- add stuff like what u learned and design tradeoffs 
+- for videos theyre looking for marketing capability - make ppl invest
+- make sure final presentation to show face cam
