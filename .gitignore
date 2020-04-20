@@ -2,5 +2,4 @@ scan*
 .vscode
 scripts/__pycache__
 *.blend1
-*.stl
 *.mtl
