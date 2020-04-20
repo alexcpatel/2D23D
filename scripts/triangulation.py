@@ -1,13 +1,63 @@
-import pyvista as pv
+import argparse
 import open3d as o3d
 import numpy as np
 
-FILENAMES = ['test']
 
-for filename in FILENAMES:
-  pcd = o3d.io.read_point_cloud(filename + '.pcd')
-  points = np.asarray(pcd.points)
-  cloud = pv.PolyData(points)
-  volume = cloud.delaunay_3d(tol=0.5)
-  shell = volume.extract_geometry()
-  shell.save(filename + '.stl')
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--debug", action="store_true", help="debugging mode")
+    parser.add_argument(
+        "-f", "--filename", dest="filename", required=True, help="<filename>.pcd"
+    )
+
+    args = parser.parse_args()
+    filename = args.filename
+    DEBUG = args.debug
+
+    if DEBUG:
+        o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
+
+    pcd = o3d.io.read_point_cloud(filename + ".pcd")
+
+    # max_nn: max number of nearest neighbor
+    # radius: radius of search
+    pcd.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+
+    # orient the normals inwards
+    pcd.orient_normals_towards_camera_location([0, 0, 1])
+    # reorient normals
+    normals = []
+    for normal in pcd.normals:
+        normals.append(normal * -1)
+    pcd.normals = o3d.utility.Vector3dVector(np.asarray(normals, dtype=np.float64))
+
+    if DEBUG:
+        print(pcd)
+        o3d.visualization.draw_geometries([pcd])
+
+    # poisson reconstruction
+    mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        pcd, depth=8, linear_fit=True
+    )
+    mesh.compute_triangle_normals()
+
+    # preprocess mesh to correct it
+    mesh.remove_degenerate_triangles()
+    mesh.remove_duplicated_triangles()
+    mesh.remove_duplicated_vertices()
+    mesh.remove_non_manifold_edges()
+    mesh.remove_unreferenced_vertices()
+
+    # merge close vertices
+    eps = np.mean(pcd.compute_nearest_neighbor_distance())
+    mesh = mesh.merge_close_vertices(eps)
+
+    if DEBUG:
+        o3d.visualization.draw_geometries([mesh])
+
+    # store file
+    o3d.io.write_triangle_mesh(filename + ".obj", mesh)
+
+
+if __name__ == "__main__":
+    main()
