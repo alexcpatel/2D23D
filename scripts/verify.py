@@ -265,33 +265,46 @@ def distance_to_mesh(point, triangles):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", action="store_true", help="debugging mode")
-    parser.add_argument("-s", "--scanfilename", dest="scanfilename", required=True, help="<scanfilename>")
-    parser.add_argument("-t", "--groundtruthfilename",  dest="groundtruthfilename", required=True, help="<groundtruthfilename>")
-    parser.add_argument("-i", "--numicppoints", dest="numicppoints", required=False, help="[numicppoints]")
+    parser.add_argument("-s", "--scan_filename", dest="scan_filename", required=True, help="<scan_filename>")
+    parser.add_argument("-t", "--truth_filename",  dest="truth_filename", required=True, help="<truth_filename>")
+    parser.add_argument("-k", "--num_kd_tree_neighbors", dest="num_kd_tree_neighbors", required=False, help="[num_kd_tree_neighbors]")
+    parser.add_argument("-i", "--num_ipc_points", dest="num_ipc_points", required=False, help="[num_ipc_points]")
 
-    DEFAULT_ICP_NUM_POINTS = 1000000
+    DEFAULT_NUM_ICP_POINTS    = 200000
+    DEFAULT_KD_TREE_NEIGHBORS = 10
 
-    args                = parser.parse_args()
-    scanfilename        = args.scanfilename
-    groundtruthfilename = args.groundtruthfilename
-    icp_num_points      = int(args.numicppoints) if args.numicppoints != None else DEFAULT_ICP_NUM_POINTS
-    DEBUG               = args.debug
+    args                  = parser.parse_args()
+    scan_filename         = args.scan_filename
+    truth_filename        = args.truth_filename
+    num_ipc_points        = int(args.num_ipc_points) \
+                            if args.num_ipc_points != None \
+                            else DEFAULT_NUM_ICP_POINTS
+    num_kd_tree_neighbors = int(args.num_kd_tree_neighbors) \
+                            if args.num_kd_tree_neighbors != None \
+                            else DEFAULT_KD_TREE_NEIGHBORS
+    DEBUG                 = args.debug
 
     if DEBUG:
         o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
 
     # load meshes
     voxel_size  = 0.05
-    source_mesh = o3d.io.read_triangle_mesh(scanfilename)
-    target_mesh = o3d.io.read_triangle_mesh(groundtruthfilename)
-    source_pcd  = source_mesh.sample_points_uniformly(number_of_points = icp_num_points)
-    target_pcd  = target_mesh.sample_points_uniformly(number_of_points = icp_num_points)
-    source_down, source_fpfh = icp.preprocess_point_cloud(source_pcd, voxel_size)
-    target_down, target_fpfh = icp.preprocess_point_cloud(target_pcd, voxel_size)
+    source_mesh = o3d.io.read_triangle_mesh(scan_filename)
+    target_mesh = o3d.io.read_triangle_mesh(truth_filename)
+    source_pcd  = source_mesh.sample_points_uniformly(
+        number_of_points=num_ipc_points)
+    target_pcd  = target_mesh.sample_points_uniformly(
+        number_of_points=num_ipc_points)
+    source_down, source_fpfh = icp.preprocess_point_cloud(
+        source_pcd, voxel_size)
+    target_down, target_fpfh = icp.preprocess_point_cloud(
+        target_pcd, voxel_size)
 
     # find transformation between source and target
-    result_global = icp.execute_global_registration(source_down, target_down, source_fpfh, target_fpfh, voxel_size)
-    result_local  = icp.execute_local_registration(source_pcd, target_pcd, source_fpfh, target_fpfh, voxel_size, result_global)
+    result_global = icp.execute_global_registration(source_down, target_down,
+        source_fpfh, target_fpfh, voxel_size)
+    result_local  = icp.execute_local_registration(source_pcd, target_pcd,
+        source_fpfh, target_fpfh, voxel_size, result_global)
     
     # preprocess mesh to correct it
     source_mesh.remove_degenerate_triangles()
@@ -325,21 +338,23 @@ def main():
     target_p2s        = target_triangles[:,2,:]
 
     centroid_tree     = KDTree(target_centroids)
-    _, centroid_ind   = centroid_tree.query(source_points, k=5)
+    _, centroid_ind   = centroid_tree.query(source_points, k=num_kd_tree_neighbors)
     p0_tree           = KDTree(target_p0s)
-    _, p0_ind         = p0_tree.query(source_points, k=5)
+    _, p0_ind         = p0_tree.query(source_points, k=num_kd_tree_neighbors)
     p1_tree           = KDTree(target_p1s)
-    _, p1_ind         = p1_tree.query(source_points, k=5)
+    _, p1_ind         = p1_tree.query(source_points, k=num_kd_tree_neighbors)
     p2_tree           = KDTree(target_p2s)
-    _, p2_ind         = p2_tree.query(source_points, k=5)
+    _, p2_ind         = p2_tree.query(source_points, k=num_kd_tree_neighbors)
 
     nearest_ind       = np.append(np.append(centroid_ind, p0_ind, axis=1),
                         np.append(p1_ind, p2_ind, axis=1), axis=1)
     nearest_triangles = target_triangles[nearest_ind]
 
     # ACCURACY REQUIREMENT:
-    # 100% of non-occluded points must be within 5% of the longest axis to the ground truth model.
-    # 90% of non-occluded points must be within 2% of the longest axis to the ground truth model.
+    # 100% of non-occluded points must be within 5% of the longest axis to 
+    #   the ground truth model.
+    # 90% of non-occluded points must be within 2% of the longest axis to
+    #   the ground truth model.
 
     # determine longest axis cutoffs for ground truth mesh
     target_bbox       = target_mesh.get_axis_aligned_bounding_box()
@@ -348,7 +363,7 @@ def main():
     two_percent_dist  = 0.02 * longest_axis
     five_percent_dist = 0.05 * longest_axis
 
-    # get the distance from each vertex of the scan mesh to the ground truth mesh
+    # get the distance from each vertex of the scan to ground truth
     num_points            = source_points.shape[0]
     num_two_percent_dist  = 0
     num_five_percent_dist = 0
@@ -376,10 +391,12 @@ def main():
 
     if num_five_percent_dist > 0:
         print("Scan does not meet accuracy requirement:\n",
-              "\t100% of non-occluded points must be within 5% of the longest axis to the ground truth model.")
+              "\t100% of non-occluded points must be within 5% of the longest \
+axis to the ground truth model.")
     elif num_two_percent_dist > 0.1 * num_points:
         print("Scan does not meet accuracy requirement:\n",
-              "\t90% of non-occluded points must be within 2% of the longest axis to the ground truth model.")
+              "\t90% of non-occluded points must be within 2% of the longest \
+axis to the ground truth model.")
     else:
         print("Scan meets accuracy requirements!")
 
