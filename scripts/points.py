@@ -10,8 +10,8 @@ from constants import *
 # RETURNS: list of laser pixels as (x, y) tuples
 def detect_laser_pixels(image):
   # extract element-wise channel diff intensity
-  image[...,1] >>= 1; image[...,2] >>= 1
-  intensity = image[...,0] - image[...,1] - image[...,2]
+  nonred     = (image[...,1] >> 1) + (image[...,2] >> 1)
+  intensity  = np.maximum(image[...,0], nonred) - nonred
   rows, cols = intensity.shape
 
   # apply hamming window to smooth intensity rows
