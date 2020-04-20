@@ -1,7 +1,10 @@
 import argparse
 import open3d as o3d
 import numpy as np
+import copy
 import icp
+
+from sklearn.neighbors import KDTree 
 from numpy import dot
 from math import sqrt
 
@@ -250,10 +253,11 @@ def pointTriangleDistance(TRI, P):
     PP0 = B + s * E0 + t * E1
     return dist, PP0
 
-def distance_to_mesh(point, target_points, target_triangles):
+def distance_to_mesh(point, triangles):
     min_dist = -1
-    for triangle in target_triangles:
-        dist, _ = pointTriangleDistance(target_points[triangle], point)
+    for triangle in triangles:
+        alt_triangle = np.asarray([triangle[0], triangle[2], triangle[1]])
+        dist, _ = pointTriangleDistance(triangle, point)
         if min_dist < 0 or dist < min_dist:
             min_dist = dist
     return min_dist
@@ -265,7 +269,7 @@ def main():
     parser.add_argument("-t", "--groundtruthfilename",  dest="groundtruthfilename", required=True, help="<groundtruthfilename>")
     parser.add_argument("-i", "--numicppoints", dest="numicppoints", required=False, help="[numicppoints]")
 
-    DEFAULT_ICP_NUM_POINTS = 100000
+    DEFAULT_ICP_NUM_POINTS = 1000000
 
     args                = parser.parse_args()
     scanfilename        = args.scanfilename
@@ -308,9 +312,30 @@ def main():
     # o3d.visualization.draw_geometries([source_mesh, target_mesh])
 
     # extract points and triangles from source and target
-    source_points    = np.asarray(source_mesh.vertices)
-    target_points    = np.asarray(target_mesh.vertices)
-    target_triangles = np.asarray(target_mesh.triangles)
+    source_points           = np.asarray(source_mesh.vertices)
+    target_points           = np.asarray(target_mesh.vertices)
+    target_triangle_indices = np.asarray(target_mesh.triangles)
+    target_triangles        = target_points[target_triangle_indices]
+
+    # form kd-trees and query to precompute closest triangles
+    target_centroids  = copy.deepcopy(target_triangles)
+    target_centroids  = np.average(target_triangles, 1)
+    target_p0s        = target_triangles[:,0,:]
+    target_p1s        = target_triangles[:,1,:]
+    target_p2s        = target_triangles[:,2,:]
+
+    centroid_tree     = KDTree(target_centroids)
+    _, centroid_ind   = centroid_tree.query(source_points, k=5)
+    p0_tree           = KDTree(target_p0s)
+    _, p0_ind         = p0_tree.query(source_points, k=5)
+    p1_tree           = KDTree(target_p1s)
+    _, p1_ind         = p1_tree.query(source_points, k=5)
+    p2_tree           = KDTree(target_p2s)
+    _, p2_ind         = p2_tree.query(source_points, k=5)
+
+    nearest_ind       = np.append(np.append(centroid_ind, p0_ind, axis=1),
+                        np.append(p1_ind, p2_ind, axis=1), axis=1)
+    nearest_triangles = target_triangles[nearest_ind]
 
     # ACCURACY REQUIREMENT:
     # 100% of non-occluded points must be within 5% of the longest axis to the ground truth model.
@@ -331,10 +356,9 @@ def main():
     total_dist            = 0
 
     for i in range(num_points):
-        if DEBUG:
+        if DEBUG and i % 10000 == 0:
             print(i)
-        point = source_points[i]
-        dist = distance_to_mesh(point, target_points, target_triangles)
+        dist = distance_to_mesh(source_points[i], nearest_triangles[i])
         if dist > two_percent_dist:
             num_two_percent_dist += 1
         if dist > five_percent_dist:
@@ -352,10 +376,10 @@ def main():
 
     if num_five_percent_dist > 0:
         print("Scan does not meet accuracy requirement:\n",
-              "100% of non-occluded points must be within 5% of the longest axis to the ground truth model.")
+              "\t100% of non-occluded points must be within 5% of the longest axis to the ground truth model.")
     elif num_two_percent_dist > 0.1 * num_points:
         print("Scan does not meet accuracy requirement:\n",
-              "90% of non-occluded points must be within 2% of the longest axis to the ground truth model.")
+              "\t90% of non-occluded points must be within 2% of the longest axis to the ground truth model.")
     else:
         print("Scan meets accuracy requirements!")
 
