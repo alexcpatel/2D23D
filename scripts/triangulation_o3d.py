@@ -41,11 +41,22 @@ def main():
     )
     mesh.compute_triangle_normals()
 
+    # preprocess mesh to correct it
+    mesh.remove_degenerate_triangles()
+    mesh.remove_duplicated_triangles()
+    mesh.remove_duplicated_vertices()
+    mesh.remove_non_manifold_edges()
+    mesh.remove_unreferenced_vertices()
+
+    # merge close vertices
+    eps = np.mean(pcd.compute_nearest_neighbor_distance())
+    mesh = mesh.merge_close_vertices(eps)
+
     if DEBUG:
         o3d.visualization.draw_geometries([mesh])
 
     # store file
-    o3d.io.write_triangle_mesh(filename + ".stl", mesh)
+    o3d.io.write_triangle_mesh(filename + ".obj", mesh)
 
 
 if __name__ == "__main__":
