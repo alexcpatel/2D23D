@@ -163,7 +163,7 @@ def main():
   print("Using image scan directory " + scan_dir)
 
   run_points(scan_dir, "test.pcd", DEFAULT_LASER_THRESHOLD, DEFAULT_WINDOW_LEN,
-             DEFAULT_PIXEL_SKIP, 1, DEBUG)
+             DEFAULT_PIXEL_SKIP, 1, DEBUG, True)
 
 if __name__ == "__main__":
   main()

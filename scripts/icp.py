@@ -70,7 +70,7 @@ def draw_registration_result(source, target, transformation):
     source_temp.transform(transformation)
     o3d.visualization.draw_geometries([source_temp, target_temp], width=1280, height=720)
 
-def output_registration_result(source, target, output_file, transformation, display):
+def output_registration_result(source, target, output_file, transformation, display = False):
     new_pcd = o3d.geometry.PointCloud()
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
@@ -149,17 +149,20 @@ if __name__ == "__main__":
     dest_pcd = sys.argv[2]
     output_pcd = sys.argv[3]
 
-    (source, target, transformation) = run_icp(source_pcd, dest_pcd)
+    (source, target, transformation) = run_icp(source_pcd, dest_pcd, True, True)
     
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
     print("Point cloud distance:")
     print(pcd_distance(source_temp, target_temp))
-    # source_temp.transform(transformation)
-    # (scale, scaled_source) = scale_aligned_pcd(source_temp, target_temp, 0.01, 10000)
-    # print("Scale: " + str(scale))
+    
+    test_scale = False
+    if (test_scale):
+        source_temp.transform(transformation)
+        (scale, scaled_source) = scale_aligned_pcd(source_temp, target_temp, 0.01, 10000)
+        print("Scale: " + str(scale))
 
-    output_registration_result(source, target, output_pcd, transformation)
+    output_registration_result(source, target, output_pcd, transformation, True)
 
     # Scaling pipeline
     # if (scale > 1.05 or scale < 0.95): # iterate until proper scale
