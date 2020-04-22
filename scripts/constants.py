@@ -4,13 +4,13 @@ DEBUG = False
 
 DEFAULT_LASER_THRESHOLD = 100 # arbitrary
 DEFAULT_WINDOW_LEN      = 5   # MUST BE ODD!
-DEFAULT_PIXEL_SKIP      = 2
+DEFAULT_PIXEL_SKIP      = 1
 
 ## SCAN CONSTANTS (all units in meters) ##
 
 # taken from blender object properties
 CAMERA_FOCAL_LENGTH  = 0.050
-CAMERA_SENSOR_WIDTH  = 0.036
+CAMERA_SENSOR_WIDTH  = 0.056
 
 """
 USING BLENDER SCRIPT:                                 

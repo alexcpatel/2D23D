@@ -1,6 +1,8 @@
 scan*
+local*
 .vscode
 scripts/__pycache__
 *.blend1
 *.mtl
 scripts/temp
+pcd_out

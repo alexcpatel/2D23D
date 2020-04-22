@@ -31,9 +31,9 @@ def main():
     TEMP_DIR                  = "temp"
     DEFAULT_OUT_FILENAME      = os.path.join(args.main_directory + ".obj")
 
-    DEFAULT_LASER_THRESHOLD   = 100 # arbitrary
+    DEFAULT_LASER_THRESHOLD   = 95  # arbitrary, but found by testing
     DEFAULT_WINDOW_LEN        = 5   # MUST BE ODD!
-    DEFAULT_PIXEL_SKIP        = 2
+    DEFAULT_PIXEL_SKIP        = 1
     DEFAULT_IMAGE_SKIP        = 1
 
     DEFAULT_NUM_ICP_POINTS    = 200000

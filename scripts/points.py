@@ -62,7 +62,7 @@ def screen_points_to_laser_plane(screen_points):
     if abs(denom) < 1.0e-6: continue
     time      = numerator / denom
     world     = CAMERA_POS + direction * time
-    if time < 0 or world[2] < 0: continue
+    if time < 0 or time > CAMERA_POS[1] + 1.5 or world[2] < 0: continue
     world_points.append(world)
 
   return world_points

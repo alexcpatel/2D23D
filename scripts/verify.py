@@ -266,6 +266,7 @@ def distance_to_mesh(two_percent_dist, five_percent_distpoint, point, triangles)
     return min_dist
 
 def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose, display):
+    display = False
     if verbose:
         o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
 

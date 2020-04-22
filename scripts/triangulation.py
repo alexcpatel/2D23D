@@ -19,9 +19,9 @@ def run_triangulation(in_filename, out_filename, verbose, display):
         normals.append(normal * -1)
     pcd.normals = o3d.utility.Vector3dVector(np.asarray(normals, dtype=np.float64))
 
-    if display: 
-        if verbose: print("Displaying input pcd file for triangulation...")
-        o3d.visualization.draw_geometries([pcd])
+    # if display: 
+    #     if verbose: print("Displaying input pcd file for triangulation...")
+    #     o3d.visualization.draw_geometries([pcd])
 
     # poisson reconstruction
     mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
