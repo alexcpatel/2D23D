@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import open3d as o3d
 
 import points
 import icp
