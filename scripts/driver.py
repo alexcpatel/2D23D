@@ -9,9 +9,10 @@ import verify
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("-m", "--mode", dest="mode", required=True, help="<mode (f: full pipeline, p: generate pcds in temp folder, t: start with pcds in directory)>")
     parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="verbose mode")
     parser.add_argument("-d", "--display", dest="display", action="store_true", help="display mode")
-    parser.add_argument("-s", "--scan_directory", dest="main_directory", required=True, help="<scan_directory>")
+    parser.add_argument("-s", "--input_directory", dest="main_directory", required=True, help="<input_directory>")
     parser.add_argument("-o", "--output_filename", dest="out_filename", required=False, help="[output_filename (otherwise <scan_directory>.pcd)]")
 
     # point cloud arguments
@@ -37,7 +38,12 @@ def main():
     DEFAULT_IMAGE_SKIP        = 1
 
     DEFAULT_NUM_ICP_POINTS    = 200000
-    DEFAULT_KD_TREE_NEIGHBORS = 10
+    DEFAULT_KD_TREE_NEIGHBORS = 5
+
+    mode                    = args.mode
+    if mode != 'f' and mode != 'p' and mode != 't':
+        print("Mode must be one of: [f, p, t]")
+        exit(-1)
 
     laser_threshold         = int(args.laser_threshold)       if args.laser_threshold       else DEFAULT_LASER_THRESHOLD
     window_len              = int(args.window_len)            if args.window_len            else DEFAULT_WINDOW_LEN
@@ -53,29 +59,41 @@ def main():
     verbose                 = args.verbose
     display                 = args.display
 
-    # parses directory and create point clouds
-    # temporarily stores as pcd files under temp directory
+    # create temporary directory
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR)
     os.makedirs(TEMP_DIR)
 
-    scan_dirs = os.listdir(main_directory)
-    for scan_dir in scan_dirs:
-        pcd_out_filename = os.path.join(TEMP_DIR, os.path.basename(scan_dir) + ".pcd")
-        points.run_points(os.path.join(main_directory, scan_dir), pcd_out_filename,
-                          laser_threshold, window_len, pixel_skip, image_skip, verbose, display)
+    # parses directory and create point clouds
+    # temporarily stores as pcd files under temp directory
+    if mode == 'f' or mode == 'p':
+        scan_dirs = os.listdir(main_directory)
+        for scan_dir in scan_dirs:
+            pcd_out_filename = os.path.join(TEMP_DIR, os.path.basename(scan_dir) + ".pcd")
+            points.run_points(os.path.join(main_directory, scan_dir), pcd_out_filename,
+                              laser_threshold, window_len, pixel_skip, image_skip, verbose, display)
+
+        if mode == 'p':
+            print("All point clouds generated in %s" % TEMP_DIR)
+            exit(0)
 
     # perform icps on all pcd files under temp directory
-    # source_pcd becomes the icp'ed point cloud
-    pcd_files = os.listdir(TEMP_DIR)
-    source_pcd = os.path.join(TEMP_DIR, pcd_files[0])
+    pcd_dir = TEMP_DIR if mode == 'f' else main_directory
+    pcd_files = os.listdir(pcd_dir)
+    merge_pcd = os.path.join(TEMP_DIR, "__merge__.pcd")
+
+    # copy pcd 0 into merge_pcd
+    source = o3d.io.read_point_cloud(os.path.join(pcd_dir, pcd_files[0]))
+    o3d.io.write_point_cloud(merge_pcd, source)
+
+    # merge each other pcd with it
     for i in range(1, len(pcd_files)):
-        dest_pcd = os.path.join(TEMP_DIR, pcd_files[i])
-        (source, target, transformation) = icp.run_icp(source_pcd, dest_pcd, verbose, display)
-        icp.output_registration_result(source, target, source_pcd, transformation, display)
+        source_pcd = os.path.join(pcd_dir, pcd_files[i])
+        (source, target, transformation) = icp.run_icp(source_pcd, merge_pcd, verbose, display)
+        icp.output_registration_result(source, target, merge_pcd, transformation, display)
     
     # perform triangulation
-    triangulation.run_triangulation(source_pcd, out_filename, verbose, display)
+    triangulation.run_triangulation(merge_pcd, out_filename, verbose, display)
 
     # perform verification
     if truth_filename:
