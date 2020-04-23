@@ -1,6 +1,6 @@
 import numpy as np
 
-DEBUG = False
+DEBUG = True
 
 DEFAULT_LASER_THRESHOLD = 100 # arbitrary
 DEFAULT_WINDOW_LEN      = 5   # MUST BE ODD!
