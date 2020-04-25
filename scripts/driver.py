@@ -22,6 +22,11 @@ def main():
     parser.add_argument("-p", "--pixel_skip", dest="pixel_skip", required=False, help="[pixel_skip]")
     parser.add_argument("-f", "--image_skip", dest="image_skip", required=False, help="[image_skip]")
 
+    # triangulation argument
+    triangulation_parser = parser.add_mutually_exclusive_group()
+    triangulation_parser.add_argument("-df", "--delaunay_fast", dest="delaunay_fast", action="store_true", required=False, help="fast delaunay triangulation")
+    triangulation_parser.add_argument("-ds", "--delaunay_slow", dest="delaunay_slow", action="store_true", required=False, help="slow delaunay triangulation")
+
     # verification arguments
     parser.add_argument("-t", "--ground_truth_filename",  dest="truth_filename", required=False, help="[ground_truth_filename (perform verification)]")
     parser.add_argument("-k", "--num_kd_tree_neighbors", dest="num_kd_tree_neighbors", required=False, help="[num_kd_tree_neighbors]")
@@ -53,6 +58,9 @@ def main():
 
     out_filename            = args.out_filename               if args.out_filename          else DEFAULT_OUT_FILENAME
 
+    delaunay_fast           = args.delaunay_fast
+    delaunay_slow           = args.delaunay_slow
+
     truth_filename          = args.truth_filename  
     num_ipc_points          = int(args.num_ipc_points)        if args.num_ipc_points        else DEFAULT_NUM_ICP_POINTS
     num_kd_tree_neighbors   = int(args.num_kd_tree_neighbors) if args.num_kd_tree_neighbors else DEFAULT_KD_TREE_NEIGHBORS
@@ -70,6 +78,8 @@ def main():
     if mode == 'f' or mode == 'p':
         scan_dirs = os.listdir(main_directory)
         for scan_dir in scan_dirs:
+            # for MacOS
+            if scan_dir.startswith(".DS_Store"): continue
             pcd_out_filename = os.path.join(TEMP_DIR, os.path.basename(scan_dir) + ".pcd")
             points.run_points(os.path.join(main_directory, scan_dir), pcd_out_filename,
                               laser_threshold, window_len, pixel_skip, image_skip, verbose, display)
@@ -81,12 +91,14 @@ def main():
     # perform icps on all pcd files under temp directory
     pcd_dir = TEMP_DIR if mode == 'f' else main_directory
     pcd_files = os.listdir(pcd_dir)
+    # for MacOS
+    if ".DS_Store" in pcd_files: 
+        pcd_files.remove(".DS_Store")
     merge_pcd = os.path.join(TEMP_DIR, "__merge__.pcd")
 
     # copy pcd 0 into merge_pcd
     source = o3d.io.read_point_cloud(os.path.join(pcd_dir, pcd_files[0]))
     o3d.io.write_point_cloud(merge_pcd, source)
-
     # merge each other pcd with it
     for i in range(1, len(pcd_files)):
         source_pcd = os.path.join(pcd_dir, pcd_files[i])
@@ -94,7 +106,12 @@ def main():
         icp.output_registration_result(source, target, merge_pcd, transformation, display)
     
     # perform triangulation
-    triangulation.run_triangulation(merge_pcd, out_filename, verbose, display)
+    if delaunay_fast:
+        triangulation.run_delaunay(merge_pcd, out_filename, verbose, display, alpha=0.1)
+    elif delaunay_slow:
+        triangulation.run_delaunay(merge_pcd, out_filename, verbose, display, alpha=0.05)
+    else:
+        triangulation.run_triangulation(merge_pcd, out_filename, verbose, display)
 
     # perform verification
     if truth_filename:
