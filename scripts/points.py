@@ -87,6 +87,7 @@ def world_points_to_object_points(world_points, angle):
 # generate all points for point cloud from scan
 def generate_points(scan_dir, laser_threshold, window_len, pixel_skip, image_skip, verbose):
   _, _, image_names = next(os.walk(scan_dir), (None, None, []))
+  image_names.sort()
   image_num = len(image_names)
   base_angle = (2.0 * math.pi) / image_num
 

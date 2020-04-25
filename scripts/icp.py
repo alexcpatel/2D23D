@@ -3,12 +3,12 @@ import numpy as np
 import copy
 import sys
 import statistics
+import argparse
 
 def preprocess_point_cloud(pcd, voxel_size, verbose, display):
     if verbose:
         print("Downsampling with a voxel size %.3f." % voxel_size)
     pcd_down = pcd.voxel_down_sample(voxel_size)
-
     radius_normal = voxel_size * 2
     if verbose:
         print("Estimate normal with search radius %.3f." % radius_normal)
@@ -141,15 +141,28 @@ def run_icp(source_pcd, dest_pcd, verbose, display): # takes pcd filenames as in
     return (source, target, result_local.transformation)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python icp.py <pcd_1> <pcd_2> <output_pcd>")
-        exit(-1)
-    
-    source_pcd = sys.argv[1]
-    dest_pcd = sys.argv[2]
-    output_pcd = sys.argv[3]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('files', nargs='*', help="<pcd_1> <pcd_2> <output_pcd>")
+    parser.add_argument("-v", "--verbose", action="store_true", help="verbose mode")
+    parser.add_argument("-d", "--display", action="store_true", help="display point cloud and mesh")
 
-    (source, target, transformation) = run_icp(source_pcd, dest_pcd, True, True)
+    args     = parser.parse_args()
+    source_pcd, dest_pcd, output_pcd = args.files
+    verbose  = args.verbose
+    display = args.display
+
+    # if len(sys.argv) < 4 or len(sys.argv) > 5:
+    #     print("Usage: python icp.py <pcd_1> <pcd_2> <output_pcd>")
+    #     exit(-1)
+    
+    # source_pcd = sys.argv[1]
+    # dest_pcd = sys.argv[2]
+    # output_pcd = sys.argv[3]
+
+    print(source_pcd, dest_pcd, output_pcd)
+    
+
+    (source, target, transformation) = run_icp(source_pcd, dest_pcd, True, False)
     
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
