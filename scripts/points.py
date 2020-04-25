@@ -150,10 +150,11 @@ def run_points(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, 
     o3d.visualization.draw_geometries([pcd])
 
 def main():
-  if len(sys.argv) != 2:
-    print("Usage: python points.py <scan_dir>")
+  if len(sys.argv) != 3:
+    print("Usage: python points.py <scan_dir> <output_filename>")
     exit(-1)
   scan_dir = sys.argv[1]
+  output_filename = sys.argv[2]
   if not os.path.isdir(scan_dir):
     print("Error: scan_dir argument (%s) is not a valid directory" % scan_dir)
     exit(-1)
@@ -162,7 +163,7 @@ def main():
     exit(-1)
   print("Using image scan directory " + scan_dir)
 
-  run_points(scan_dir, "test.pcd", DEFAULT_LASER_THRESHOLD, DEFAULT_WINDOW_LEN,
+  run_points(scan_dir, output_filename, DEFAULT_LASER_THRESHOLD, DEFAULT_WINDOW_LEN,
              DEFAULT_PIXEL_SKIP, 1, DEBUG, True)
 
 if __name__ == "__main__":
