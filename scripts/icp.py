@@ -50,7 +50,7 @@ def execute_global_registration(source_down, target_down, source_fpfh,
             o3d.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
             o3d.registration.CorrespondenceCheckerBasedOnDistance(
                 distance_threshold)
-        ], o3d.registration.RANSACConvergenceCriteria(4000000, 500)) #(max iterations, validation steps)
+        ], o3d.registration.RANSACConvergenceCriteria(5000000, 500)) #(max iterations, validation steps)
     return result
 
 def execute_local_registration(source, target, source_fpfh, target_fpfh, voxel_size, result_global, verbose):
@@ -59,7 +59,8 @@ def execute_local_registration(source, target, source_fpfh, target_fpfh, voxel_s
         print("Local Point-to-point ICP registration with distance threshold %.3f." % distance_threshold)
     result = o3d.registration.registration_icp(
         source, target, distance_threshold, result_global.transformation,
-        o3d.registration.TransformationEstimationPointToPoint())
+        o3d.registration.TransformationEstimationPointToPoint(),
+        o3d.registration.ICPConvergenceCriteria(max_iteration = 2000))
     return result
 
 def draw_registration_result(source, target, transformation):
@@ -151,6 +152,9 @@ if __name__ == "__main__":
     verbose  = args.verbose
     display = args.display
 
+    if verbose:
+        o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
+
     # if len(sys.argv) < 4 or len(sys.argv) > 5:
     #     print("Usage: python icp.py <pcd_1> <pcd_2> <output_pcd>")
     #     exit(-1)
@@ -162,7 +166,7 @@ if __name__ == "__main__":
     print(source_pcd, dest_pcd, output_pcd)
     
 
-    (source, target, transformation) = run_icp(source_pcd, dest_pcd, True, False)
+    (source, target, transformation) = run_icp(source_pcd, dest_pcd, verbose, display)
     
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
