@@ -14,7 +14,7 @@ import verify
 CSV_FIELDNAMES = ["num_points", "num_two_percent_dist", "num_two_percent_dist_percent", 
                   "num_five_percent_dist", "num_five_percent_dist_percent", "total_time"]
 
-def run_program():
+def run_program(iteration = 1):
     # create temporary directory
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR)
@@ -23,8 +23,7 @@ def run_program():
     # parses directory and create point clouds
     # temporarily stores as pcd files under temp directory
 
-    if program_result:
-        start_time = time.time()
+    start_time = time.time()
 
     if mode == 'f' or mode == 'p':
         scan_dirs = os.listdir(main_directory)
@@ -66,6 +65,8 @@ def run_program():
 
     if program_result:
         program_result["total_time"].append(time.time() - start_time)
+    
+    print("Iteration " + str(iteration) + " total time: " + str(time.time() - start_time))
 
     # perform verification
     if truth_filename:
@@ -107,7 +108,7 @@ def finalize_csv():
 
 def main():
     for i in range(num_iters):
-        run_program()
+        run_program(i+1)
 
     if program_result and truth_filename:
         finalize_csv()
