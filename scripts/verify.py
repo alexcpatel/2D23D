@@ -266,130 +266,179 @@ def distance_to_mesh(two_percent_dist, five_percent_distpoint, point, triangles)
             min_dist = dist
     return min_dist
 
-def process_results(program_result, num_points, num_two_percent_dist, num_five_percent_dist):
-    num_two_percent_dist_percent = (num_two_percent_dist  / num_points) * 100.0
-    num_five_percent_dist_percent = (num_five_percent_dist / num_points) * 100.0
+def compute_accuracy(num_two_percent_dist_percent, num_five_percent_dist_percent):
+    return 100.0 - 0.9 * (num_two_percent_dist_percent - num_five_percent_dist_percent) - num_five_percent_dist_percent
 
-    program_result["num_points"].append(num_points)
-    program_result["num_two_percent_dist"].append(num_two_percent_dist)
-    program_result["num_two_percent_dist_percent"].append(num_two_percent_dist_percent)
-    program_result["num_five_percent_dist"].append(num_five_percent_dist)
-    program_result["num_five_percent_dist_percent"].append(num_five_percent_dist_percent)
+def process_results(program_result, results):
+    forward_accuracy = compute_accuracy(results["forward"]["num_two_percent_dist_percent"], results["forward"]["num_five_percent_dist_percent"])
+    program_result["forward_num_points"].append(results["forward"]["num_points"])
+    program_result["forward_num_two_percent_dist"].append(results["forward"]["num_two_percent_dist"])
+    program_result["forward_num_two_percent_dist_percent"].append(results["forward"]["num_two_percent_dist_percent"])
+    program_result["forward_num_five_percent_dist"].append(results["forward"]["num_five_percent_dist"])
+    program_result["forward_num_five_percent_dist_percent"].append(results["forward"]["num_five_percent_dist_percent"])
+    program_result["forward_accuracy"].append(forward_accuracy)
+    program_result["forward_meets_requirement"].append(1 if (results["forward"]["num_five_percent_dist"] == 0 \
+                                                       and results["forward"]["num_two_percent_dist_percent"] < 10.0) else 0)
 
+    backward_accuracy = compute_accuracy(results["backward"]["num_two_percent_dist_percent"], results["backward"]["num_five_percent_dist_percent"])
+    program_result["backward_num_points"].append(results["backward"]["num_points"])
+    program_result["backward_num_two_percent_dist"].append(results["backward"]["num_two_percent_dist"])
+    program_result["backward_num_two_percent_dist_percent"].append(results["backward"]["num_two_percent_dist_percent"])
+    program_result["backward_num_five_percent_dist"].append(results["backward"]["num_five_percent_dist"])
+    program_result["backward_num_five_percent_dist_percent"].append(results["backward"]["num_five_percent_dist_percent"])
+    program_result["backward_accuracy"].append(backward_accuracy)
+
+    total_num_points                    = results["forward"]["num_points"] + results["backward"]["num_points"]
+    total_num_two_percent_dist          = results["forward"]["num_two_percent_dist"] + results["backward"]["num_two_percent_dist"]
+    total_num_two_percent_dist_percent  = (total_num_two_percent_dist / total_num_points) * 100.0
+    total_num_five_percent_dist         = results["forward"]["num_five_percent_dist"] + results["backward"]["num_five_percent_dist"]
+    total_num_five_percent_dist_percent = (total_num_five_percent_dist / total_num_points) * 100.0
+    total_accuracy                      = compute_accuracy(total_num_two_percent_dist_percent, total_num_five_percent_dist_percent)
+    program_result["total_num_points"].append(total_num_points)
+    program_result["total_num_two_percent_dist"].append(total_num_two_percent_dist)
+    program_result["total_num_two_percent_dist_percent"].append(total_num_two_percent_dist_percent)
+    program_result["total_num_five_percent_dist"].append(total_num_five_percent_dist)
+    program_result["total_num_five_percent_dist_percent"].append(total_num_five_percent_dist_percent)
+    program_result["total_accuracy"].append(total_accuracy)
 
 def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose, display, program_result=None):
     display = False
     if verbose:
         o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
 
-    # load meshes
-    voxel_size  = 0.05
-    source_mesh = o3d.io.read_triangle_mesh(scan_filename)
-    target_mesh = o3d.io.read_triangle_mesh(truth_filename)
-    source_pcd  = source_mesh.sample_points_uniformly(
-        number_of_points=num_ipc_points)
-    target_pcd  = target_mesh.sample_points_uniformly(
-        number_of_points=num_ipc_points)
-    source_down, source_fpfh = icp.preprocess_point_cloud(
-        source_pcd, voxel_size, verbose, display)
-    target_down, target_fpfh = icp.preprocess_point_cloud(
-        target_pcd, voxel_size, verbose, display)
-
-    # find transformation between source and target
-    result_global = icp.execute_global_registration(source_down, target_down,
-        source_fpfh, target_fpfh, voxel_size, verbose)
-    result_local  = icp.execute_local_registration(source_pcd, target_pcd,
-        source_fpfh, target_fpfh, voxel_size, result_global, verbose)
-    
-    # preprocess mesh to correct it
-    source_mesh.remove_degenerate_triangles()
-    target_mesh.remove_degenerate_triangles()
-    source_mesh.remove_duplicated_triangles()
-    target_mesh.remove_duplicated_triangles()
-    source_mesh.remove_duplicated_vertices()
-    target_mesh.remove_duplicated_vertices()
-    source_mesh.remove_non_manifold_edges()
-    target_mesh.remove_non_manifold_edges()
-    source_mesh.remove_unreferenced_vertices()
-    target_mesh.remove_unreferenced_vertices()
-
-    # transform source mesh to align with target
-    source_mesh.transform(result_local.transformation)
-
     # visualize aligned meshes
     # o3d.visualization.draw_geometries([source_mesh, target_mesh])
 
-    # extract points and triangles from source and target
-    source_points           = np.asarray(source_mesh.vertices)
-    target_points           = np.asarray(target_mesh.vertices)
-    target_triangle_indices = np.asarray(target_mesh.triangles)
-    target_triangles        = target_points[target_triangle_indices]
+    results = {}
 
-    # form kd-trees and query to precompute closest triangles
-    target_centroids  = copy.deepcopy(target_triangles)
-    target_centroids  = np.average(target_triangles, 1)
-    target_p0s        = target_triangles[:,0,:]
-    target_p1s        = target_triangles[:,1,:]
-    target_p2s        = target_triangles[:,2,:]
+    # load meshes
+    for direction in ["forward", "backward"]:
 
-    centroid_tree     = KDTree(target_centroids)
-    _, centroid_ind   = centroid_tree.query(source_points, k=num_kd_tree_neighbors)
-    p0_tree           = KDTree(target_p0s)
-    _, p0_ind         = p0_tree.query(source_points, k=num_kd_tree_neighbors)
-    p1_tree           = KDTree(target_p1s)
-    _, p1_ind         = p1_tree.query(source_points, k=num_kd_tree_neighbors)
-    p2_tree           = KDTree(target_p2s)
-    _, p2_ind         = p2_tree.query(source_points, k=num_kd_tree_neighbors)
+        voxel_size  = 0.05
+        source_mesh = o3d.io.read_triangle_mesh(scan_filename)
+        target_mesh = o3d.io.read_triangle_mesh(truth_filename)
+        if direction == "backward":
+            voxel_size  = 0.05
+            source_mesh = o3d.io.read_triangle_mesh(truth_filename)
+            target_mesh = o3d.io.read_triangle_mesh(scan_filename)
 
-    nearest_ind       = np.append(np.append(centroid_ind, p0_ind, axis=1),
-                        np.append(p1_ind, p2_ind, axis=1), axis=1)
-    nearest_triangles = target_triangles[nearest_ind]
+        # visualize meshes
+        # o3d.visualization.draw_geometries([source_mesh, target_mesh])
 
-    # ACCURACY REQUIREMENT:
-    # 100% of non-occluded points must be within 5% of the longest axis to 
-    #   the ground truth model.
-    # 90% of non-occluded points must be within 2% of the longest axis to
-    #   the ground truth model.
+        source_pcd = source_mesh.sample_points_uniformly(
+            number_of_points=num_ipc_points)
+        target_pcd = target_mesh.sample_points_uniformly(
+            number_of_points=num_ipc_points)
+        source_down, source_fpfh = icp.preprocess_point_cloud(
+            source_pcd, voxel_size, verbose, display)
+        target_down, target_fpfh = icp.preprocess_point_cloud(
+            target_pcd, voxel_size, verbose, display)
 
-    # determine longest axis cutoffs for ground truth mesh
-    target_bbox       = target_mesh.get_axis_aligned_bounding_box()
-    extent            = target_bbox.get_extent()
-    longest_axis      = sqrt(extent[0]**2 + extent[1]**2 + extent[2]**2)
-    two_percent_dist  = 0.02 * longest_axis
-    five_percent_dist = 0.05 * longest_axis
+        # find transformation between source and target
+        result_global = icp.execute_global_registration(source_down, target_down,
+            source_fpfh, target_fpfh, voxel_size, verbose)
+        result_local  = icp.execute_local_registration(source_pcd, target_pcd,
+            source_fpfh, target_fpfh, voxel_size, result_global, verbose)
 
-    # get the distance from each vertex of the scan to ground truth
-    num_points            = source_points.shape[0]
-    num_two_percent_dist  = 0
-    num_five_percent_dist = 0
+        # preprocess mesh to correct it
+        source_mesh.remove_degenerate_triangles()
+        target_mesh.remove_degenerate_triangles()
+        source_mesh.remove_duplicated_triangles()
+        target_mesh.remove_duplicated_triangles()
+        source_mesh.remove_duplicated_vertices()
+        target_mesh.remove_duplicated_vertices()
+        source_mesh.remove_non_manifold_edges()
+        target_mesh.remove_non_manifold_edges()
+        source_mesh.remove_unreferenced_vertices()
+        target_mesh.remove_unreferenced_vertices()
 
-    for i in range(num_points):
-        if verbose and i % 10000 == 0:
-            print("%7d / %7d    \tvertices processed..." % (i, num_points))
-        dist = distance_to_mesh(two_percent_dist, five_percent_dist, source_points[i], nearest_triangles[i])
-        if dist > two_percent_dist:
-            num_two_percent_dist += 1
-        if dist > five_percent_dist:
-            num_five_percent_dist += 1
+        # transform source mesh to align with target
+        source_mesh.transform(result_local.transformation)
+
+        # extract points and triangles from source and target
+        source_points           = np.asarray(source_mesh.vertices)
+        target_points           = np.asarray(target_mesh.vertices)
+        target_triangle_indices = np.asarray(target_mesh.triangles)
+        target_triangles        = target_points[target_triangle_indices]
+
+        # form kd-trees and query to precompute closest triangles
+        target_centroids  = copy.deepcopy(target_triangles)
+        target_centroids  = np.average(target_triangles, 1)
+        target_p0s        = target_triangles[:,0,:]
+        target_p1s        = target_triangles[:,1,:]
+        target_p2s        = target_triangles[:,2,:]
+
+        centroid_tree     = KDTree(target_centroids)
+        _, centroid_ind   = centroid_tree.query(source_points, k=num_kd_tree_neighbors)
+        p0_tree           = KDTree(target_p0s)
+        _, p0_ind         = p0_tree.query(source_points, k=num_kd_tree_neighbors)
+        p1_tree           = KDTree(target_p1s)
+        _, p1_ind         = p1_tree.query(source_points, k=num_kd_tree_neighbors)
+        p2_tree           = KDTree(target_p2s)
+        _, p2_ind         = p2_tree.query(source_points, k=num_kd_tree_neighbors)
+
+        nearest_ind       = np.append(np.append(centroid_ind, p0_ind, axis=1),
+                            np.append(p1_ind, p2_ind, axis=1), axis=1)
+        nearest_triangles = target_triangles[nearest_ind]
+
+        # ACCURACY REQUIREMENT:
+        # 100% of non-occluded points must be within 5% of the longest axis to 
+        #   the ground truth model.
+        # 90% of non-occluded points must be within 2% of the longest axis to
+        #   the ground truth model.
+
+        # determine longest axis cutoffs for ground truth mesh
+        target_bbox       = target_mesh.get_axis_aligned_bounding_box()
+        extent            = target_bbox.get_extent()
+        longest_axis      = sqrt(extent[0]**2 + extent[1]**2 + extent[2]**2)
+        two_percent_dist  = 0.02 * longest_axis
+        five_percent_dist = 0.05 * longest_axis
+
+        # get the distance from each vertex of the scan to ground truth
+        num_points            = source_points.shape[0]
+        num_two_percent_dist  = 0
+        num_five_percent_dist = 0
+
+        for i in range(num_points):
+            if verbose and i % 10000 == 0:
+                print("%7d / %7d    \tvertices processed..." % (i, num_points))
+            dist = distance_to_mesh(two_percent_dist, five_percent_dist, source_points[i], nearest_triangles[i])
+            if dist > two_percent_dist:
+                num_two_percent_dist += 1
+            if dist > five_percent_dist:
+                num_five_percent_dist += 1
+
+        # add results to dictionary
+        num_two_percent_dist_percent = (num_two_percent_dist  / num_points) * 100.0
+        num_five_percent_dist_percent = (num_five_percent_dist / num_points) * 100.0
+
+        results[direction] = {
+            "num_points":                    num_points,
+            "num_two_percent_dist":          num_two_percent_dist,
+            "num_two_percent_dist_percent":  num_two_percent_dist_percent,
+            "num_five_percent_dist":         num_five_percent_dist,
+            "num_five_percent_dist_percent": num_five_percent_dist_percent
+        }
+
+        print("direction: %s, num_points: %d, num_two_percent_dist: %d (%f%%), num_five_percent_dist: %d (%f%%)" \
+            % (direction, num_points, num_two_percent_dist, num_two_percent_dist_percent,
+               num_five_percent_dist, num_five_percent_dist_percent))
+
+        ## end of for loop ##
 
     if program_result:
-        process_results(program_result, num_points, num_two_percent_dist, num_five_percent_dist)
-
-    print("num_points: %d, num_two_percent_dist: %d (%f%%), num_five_percent_dist: %d (%f%%)" \
-        % (num_points,
-            num_two_percent_dist,  (num_two_percent_dist  / num_points) * 100.0,
-            num_five_percent_dist, (num_five_percent_dist / num_points) * 100.0))
+        process_results(program_result, results)               
     
-    if num_five_percent_dist > 0:
-        print("Scan does not meet accuracy requirement:\n",
-            "\t100% of non-occluded points must be within 5% of the longest \
-axis to the ground truth model.")
-    elif num_two_percent_dist > 0.1 * num_points:
-        print("Scan does not meet accuracy requirement:\n",
-            "\t90% of non-occluded points must be within 2% of the longest \
-axis to the ground truth model.")
-    else:
-        print("Scan meets accuracy requirements!")
+#         if num_five_percent_dist > 0:
+#             print("Scan does not meet accuracy requirement:\n",
+#                 "\t100% of non-occluded points must be within 5% of the longest \
+# axis to the ground truth model.")
+#         elif num_two_percent_dist > 0.1 * num_points:
+#             print("Scan does not meet accuracy requirement:\n",
+#                 "\t90% of non-occluded points must be within 2% of the longest \
+# axis to the ground truth model.")
+#         else:
+#             print("Scan meets accuracy requirements!")
 
 def main():
     parser = argparse.ArgumentParser()
