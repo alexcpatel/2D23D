@@ -48,6 +48,35 @@ def run_triangulation(in_filename, out_filename, verbose, display):
     # store file
     o3d.io.write_triangle_mesh(out_filename, mesh)
 
+def run_alpha_shape(in_filename, out_filename, verbose, display, alpha=0.1):
+    if verbose: 
+        print("Perfoming alpha shape convex hull triangulation")
+        o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
+
+    pcd = o3d.io.read_point_cloud(in_filename)
+
+    tetramesh, pt_map = o3d.geometry.TetraMesh.create_from_point_cloud(pcd)
+
+    mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(
+        pcd, alpha, tetramesh, pt_map)
+    # mesh.compute_triangle_normals()
+
+    # preprocess mesh to correct it
+    mesh.remove_degenerate_triangles()
+    mesh.remove_duplicated_triangles()
+    mesh.remove_duplicated_vertices()
+    mesh.remove_non_manifold_edges()
+    mesh.remove_unreferenced_vertices()
+
+    # merge close vertices
+    eps = np.mean(pcd.compute_nearest_neighbor_distance())
+    mesh = mesh.merge_close_vertices(eps)
+
+    if display: o3d.visualization.draw_geometries([mesh])
+
+    # store file
+    o3d.io.write_triangle_mesh(out_filename, mesh)
+
 def run_delaunay(in_filename, out_filename, verbose, display, alpha=0.1):
     if verbose:
         print("Running delaunay 3D triangulation")
