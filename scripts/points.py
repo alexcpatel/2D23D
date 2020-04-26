@@ -148,7 +148,7 @@ def run_points(scan_dir, out_filename, laser_threshold, window_len, pixel_skip, 
 
   if display:
     pcd = o3d.io.read_point_cloud(out_filename)
-    o3d.visualization.draw_geometries([pcd])
+    o3d.visualization.draw_geometries([pcd], width=1280, height=720)
 
 def main():
   if len(sys.argv) != 3:
