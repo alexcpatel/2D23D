@@ -11,8 +11,35 @@ import icp
 import triangulation
 import verify
 
-CSV_FIELDNAMES = ["num_points", "num_two_percent_dist", "num_two_percent_dist_percent", 
-                  "num_five_percent_dist", "num_five_percent_dist_percent", "total_time"]
+# CSV_FIELDNAMES = ["num_points", "num_two_percent_dist", "num_two_percent_dist_percent", 
+#                   "num_five_percent_dist", "num_five_percent_dist_percent", "total_time"]
+CSV_FIELDNAMES = [ \
+    # "num_frames",
+
+    "forward_num_points",
+    "forward_num_two_percent_dist",
+    "forward_num_two_percent_dist_percent",
+    "forward_num_five_percent_dist",
+    "forward_num_five_percent_dist_percent",
+    "forward_accuracy",
+    "forward_meets_requirement",
+
+    "backward_num_points",
+    "backward_num_two_percent_dist",
+    "backward_num_two_percent_dist_percent",
+    "backward_num_five_percent_dist",
+    "backward_num_five_percent_dist_percent",
+    "backward_accuracy",
+
+    "total_num_points",
+    "total_num_two_percent_dist",
+    "total_num_two_percent_dist_percent",
+    "total_num_five_percent_dist",
+    "total_num_five_percent_dist_percent",
+    "total_accuracy",
+
+    "total_time"
+]
 
 def run_program(iteration = 1):
     # create temporary directory
@@ -24,6 +51,10 @@ def run_program(iteration = 1):
     # temporarily stores as pcd files under temp directory
 
     start_time = time.time()
+    # image_skip = i
+    # print("image_skip=%d" % image_skip)
+    # if program_result:
+    #     program_result["num_frames"].append(1024//image_skip)
 
     if mode == 'f' or mode == 'p':
         scan_dirs = os.listdir(main_directory)
@@ -72,7 +103,7 @@ def run_program(iteration = 1):
     if truth_filename:
         verify.run_verify(out_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose, display, program_result=program_result)
 
-def finalize_csv():
+def finalize_csv(num_iters):
     if verbose:
         print("Writing csv file")
     with open(verify_filename, "w", newline="") as csvfile:
@@ -107,11 +138,19 @@ def finalize_csv():
         writer.writerow(med_vals)
 
 def main():
+    # i = 1024 // 4
+    # num_iters = 1
+    # while i > 1:
+    #     run_program(i)
+    #     i //= 2
+    #     num_iters += 1
+    # run_program(1)
+
     for i in range(num_iters):
         run_program(i+1)
 
     if program_result and truth_filename:
-        finalize_csv()
+        finalize_csv(num_iters)
 
 if __name__ == "__main__":
 
@@ -155,7 +194,7 @@ if __name__ == "__main__":
     DEFAULT_NUM_ICP_POINTS    = 200000
     DEFAULT_KD_TREE_NEIGHBORS = 5
 
-    mode                    = args.mode
+    mode                      = args.mode
     if mode != 'f' and mode != 'p' and mode != 't':
         print("Mode must be one of: [f, p, t]")
         exit(-1)
