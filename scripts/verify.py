@@ -3,6 +3,7 @@ import open3d as o3d
 import numpy as np
 import copy
 import icp
+import csv
 
 from sklearn.neighbors import KDTree 
 from numpy import dot
@@ -265,7 +266,18 @@ def distance_to_mesh(two_percent_dist, five_percent_distpoint, point, triangles)
             min_dist = dist
     return min_dist
 
-def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose, display):
+def process_results(program_result, num_points, num_two_percent_dist, num_five_percent_dist):
+    num_two_percent_dist_percent = (num_two_percent_dist  / num_points) * 100.0
+    num_five_percent_dist_percent = (num_five_percent_dist / num_points) * 100.0
+
+    program_result["num_points"].append(num_points)
+    program_result["num_two_percent_dist"].append(num_two_percent_dist)
+    program_result["num_two_percent_dist_percent"].append(num_two_percent_dist_percent)
+    program_result["num_five_percent_dist"].append(num_five_percent_dist)
+    program_result["num_five_percent_dist_percent"].append(num_five_percent_dist_percent)
+
+
+def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighbors, verbose, display, program_result=None):
     display = False
     if verbose:
         o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Debug)
@@ -360,25 +372,28 @@ def run_verify(scan_filename, truth_filename, num_ipc_points, num_kd_tree_neighb
         if dist > five_percent_dist:
             num_five_percent_dist += 1
 
+    if program_result:
+        process_results(program_result, num_points, num_two_percent_dist, num_five_percent_dist)
+
     print("num_points: %d, num_two_percent_dist: %d (%f%%), num_five_percent_dist: %d (%f%%)" \
-          % (num_points,
-             num_two_percent_dist,  (num_two_percent_dist  / num_points) * 100.0,
-             num_five_percent_dist, (num_five_percent_dist / num_points) * 100.0))
+        % (num_points,
+            num_two_percent_dist,  (num_two_percent_dist  / num_points) * 100.0,
+            num_five_percent_dist, (num_five_percent_dist / num_points) * 100.0))
     
     if num_five_percent_dist > 0:
         print("Scan does not meet accuracy requirement:\n",
-              "\t100% of non-occluded points must be within 5% of the longest \
+            "\t100% of non-occluded points must be within 5% of the longest \
 axis to the ground truth model.")
     elif num_two_percent_dist > 0.1 * num_points:
         print("Scan does not meet accuracy requirement:\n",
-              "\t90% of non-occluded points must be within 2% of the longest \
+            "\t90% of non-occluded points must be within 2% of the longest \
 axis to the ground truth model.")
     else:
         print("Scan meets accuracy requirements!")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--verbose", action="store_true", help="verbose mode")
+    parser.add_argument("-v", "--verbose", action="store_true", help="verbose mode")
     parser.add_argument("-s", "--scan_filename", dest="scan_filename", required=True, help="<scan_filename>")
     parser.add_argument("-t", "--truth_filename",  dest="truth_filename", required=True, help="<truth_filename>")
     parser.add_argument("-k", "--num_kd_tree_neighbors", dest="num_kd_tree_neighbors", required=False, help="[num_kd_tree_neighbors]")
