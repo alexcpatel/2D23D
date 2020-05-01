@@ -89,14 +89,15 @@ def run_program(iteration = 1):
     # perform triangulation
     if delaunay_fast:
         triangulation.run_delaunay(merge_pcd, out_filename, verbose, display, alpha=0.1)
-    elif delaunay_slow:
-        triangulation.run_delaunay(merge_pcd, out_filename, verbose, display, alpha=0.05)
+    elif poisson:
+        triangulation.run_triangulation(merge_pcd, out_filename, verbose, display)
     elif alpha_fast:
         triangulation.run_alpha_shape(merge_pcd, out_filename, verbose, display, alpha=0.1)
     elif alpha_slow:
         triangulation.run_alpha_shape(merge_pcd, out_filename, verbose, display, alpha=0.05)
     else:
-        triangulation.run_triangulation(merge_pcd, out_filename, verbose, display)
+        # delaunay_slow
+        triangulation.run_delaunay(merge_pcd, out_filename, verbose, display, alpha=0.05)
 
     if program_result:
         program_result["total_time"].append(time.time() - start_time)
@@ -180,6 +181,7 @@ if __name__ == "__main__":
     triangulation_parser.add_argument("-ds", "--delaunay_slow", dest="delaunay_slow", action="store_true", required=False, help="slow delaunay triangulation")
     triangulation_parser.add_argument("-af", "--alpha_fast", dest="alpha_fast", action="store_true", required=False, help="fast alpha shape convex hull triangulation")
     triangulation_parser.add_argument("-as", "--alpha_slow", dest="alpha_slow", action="store_true", required=False, help="slow alpha shape convex hull triangulation")
+    triangulation_parser.add_argument("-sp", "--poisson", dest="poisson", action="store_true", required=False, help="screened poisson triangulation")
 
     # verification arguments
     parser.add_argument("-t", "--ground_truth_filename",  dest="truth_filename", required=False, help="[ground_truth_filename (perform verification)]")
@@ -216,6 +218,7 @@ if __name__ == "__main__":
     delaunay_slow           = args.delaunay_slow
     alpha_fast              = args.alpha_fast
     alpha_slow              = args.alpha_slow
+    poisson                 = args.poisson 
 
     truth_filename          = args.truth_filename  
     num_ipc_points          = int(args.num_ipc_points)        if args.num_ipc_points        else DEFAULT_NUM_ICP_POINTS
