@@ -41,7 +41,7 @@ CSV_FIELDNAMES = [ \
     "total_time"
 ]
 
-def run_program(i):
+def run_program(iteration = 1):
     # create temporary directory
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR)
@@ -50,11 +50,11 @@ def run_program(i):
     # parses directory and create point clouds
     # temporarily stores as pcd files under temp directory
 
+    start_time = time.time()
     # image_skip = i
     # print("image_skip=%d" % image_skip)
-    if program_result:
-        start_time = time.time()
-        #program_result["num_frames"].append(1024//image_skip)
+    # if program_result:
+    #     program_result["num_frames"].append(1024//image_skip)
 
     if mode == 'f' or mode == 'p':
         scan_dirs = os.listdir(main_directory)
@@ -89,13 +89,20 @@ def run_program(i):
     # perform triangulation
     if delaunay_fast:
         triangulation.run_delaunay(merge_pcd, out_filename, verbose, display, alpha=0.1)
-    elif delaunay_slow:
-        triangulation.run_delaunay(merge_pcd, out_filename, verbose, display, alpha=0.05)
-    else:
+    elif poisson:
         triangulation.run_triangulation(merge_pcd, out_filename, verbose, display)
+    elif alpha_fast:
+        triangulation.run_alpha_shape(merge_pcd, out_filename, verbose, display, alpha=0.1)
+    elif alpha_slow:
+        triangulation.run_alpha_shape(merge_pcd, out_filename, verbose, display, alpha=0.05)
+    else:
+        # delaunay_slow
+        triangulation.run_delaunay(merge_pcd, out_filename, verbose, display, alpha=0.05)
 
     if program_result:
         program_result["total_time"].append(time.time() - start_time)
+    
+    print("Iteration " + str(iteration) + " total time: " + str(time.time() - start_time))
 
     # perform verification
     if truth_filename:
@@ -145,7 +152,7 @@ def main():
     # run_program(1)
 
     for i in range(num_iters):
-        run_program(i)
+        run_program(i+1)
 
     if program_result and truth_filename:
         finalize_csv(num_iters)
@@ -172,6 +179,9 @@ if __name__ == "__main__":
     triangulation_parser = parser.add_mutually_exclusive_group()
     triangulation_parser.add_argument("-df", "--delaunay_fast", dest="delaunay_fast", action="store_true", required=False, help="fast delaunay triangulation")
     triangulation_parser.add_argument("-ds", "--delaunay_slow", dest="delaunay_slow", action="store_true", required=False, help="slow delaunay triangulation")
+    triangulation_parser.add_argument("-af", "--alpha_fast", dest="alpha_fast", action="store_true", required=False, help="fast alpha shape convex hull triangulation")
+    triangulation_parser.add_argument("-as", "--alpha_slow", dest="alpha_slow", action="store_true", required=False, help="slow alpha shape convex hull triangulation")
+    triangulation_parser.add_argument("-sp", "--poisson", dest="poisson", action="store_true", required=False, help="screened poisson triangulation")
 
     # verification arguments
     parser.add_argument("-t", "--ground_truth_filename",  dest="truth_filename", required=False, help="[ground_truth_filename (perform verification)]")
@@ -184,7 +194,7 @@ if __name__ == "__main__":
     TEMP_DIR                  = "temp"
     DEFAULT_OUT_FILENAME      = os.path.join(args.main_directory + ".obj")
 
-    DEFAULT_LASER_THRESHOLD   = 95  # arbitrary, but found by testing
+    DEFAULT_LASER_THRESHOLD   = 140  # arbitrary, but found by testing
     DEFAULT_WINDOW_LEN        = 5   # MUST BE ODD!
     DEFAULT_PIXEL_SKIP        = 1
     DEFAULT_IMAGE_SKIP        = 1
@@ -206,6 +216,9 @@ if __name__ == "__main__":
 
     delaunay_fast           = args.delaunay_fast
     delaunay_slow           = args.delaunay_slow
+    alpha_fast              = args.alpha_fast
+    alpha_slow              = args.alpha_slow
+    poisson                 = args.poisson 
 
     truth_filename          = args.truth_filename  
     num_ipc_points          = int(args.num_ipc_points)        if args.num_ipc_points        else DEFAULT_NUM_ICP_POINTS
